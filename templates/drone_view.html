@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Drone Data Viewer</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-draw/dist/leaflet.draw.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet-measure/dist/leaflet-measure.css"/>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: auto 1fr;
+            height: 100vh;
+        }
+        header {
+            grid-column: span 2;
+            background: #f8f9fa;
+            padding: 10px;
+            border-bottom: 1px solid #ddd;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .video-container {
+            padding: 10px;
+            background: #000;
+        }
+        video {
+            width: 100%;
+            height: 100%;
+            border: 2px solid #444;
+            border-radius: 8px;
+        }
+        #map {
+            height: 100%;
+            width: 100%;
+        }
+        .btn-home {
+            padding: 6px 12px;
+            background: #007bff;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+        }
+        .btn-home:hover {
+            background: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header with Back Button -->
+    <header>
+        <h3>Drone Data Viewer</h3>
+        <a href="{{ url_for('index') }}" class="btn-home">← Back to Home</a>
+    </header>
+
+    <!-- Drone Video -->
+    <div class="video-container">
+        <video controls autoplay muted>
+            <!-- Replace 'drone_video.mp4' with actual drone video stream or file -->
+            <source src="{{ url_for('static', filename='drone_video.mp4') }}" type="video/mp4">
+            Your browser does not support the video tag.
+        </video>
+    </div>
+
+    <!-- Drone Imagery with GIS tools -->
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-draw/dist/leaflet.draw.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet-measure/dist/leaflet-measure.min.js"></script>
+    <script>
+        // Initialize map
+        var map = L.map('map').setView([9.0820, 8.6753], 6); // Nigeria coordinates (default)
+
+        // Basemap (use satellite imagery tiles, e.g. Esri)
+        L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+            attribution: 'Tiles © Esri & contributors',
+            maxZoom: 19
+        }).addTo(map);
+
+        // Feature Group to store drawn items
+        var drawnItems = new L.FeatureGroup();
+        map.addLayer(drawnItems);
+
+        // Add draw controls (point, line, polygon, rectangle, circle)
+        var drawControl = new L.Control.Draw({
+            edit: {
+                featureGroup: drawnItems
+            },
+            draw: {
+                polygon: true,
+                polyline: true,
+                rectangle: true,
+                circle: true,
+                marker: true
+            }
+        });
+        map.addControl(drawControl);
+
+        // Save drawn items to the map
+        map.on(L.Draw.Event.CREATED, function (event) {
+            var layer = event.layer;
+            drawnItems.addLayer(layer);
+            console.log("Feature drawn:", layer.toGeoJSON());
+        });
+
+        // Measurement tool (distance & area)
+        L.control.measure({
+            primaryLengthUnit: 'meters',
+            secondaryLengthUnit: 'kilometers',
+            primaryAreaUnit: 'sqmeters',
+            secondaryAreaUnit: 'hectares',
+            activeColor: '#ff0000',
+            completedColor: '#00ff00'
+        }).addTo(map);
+    </script>
+</body>
+</html>
