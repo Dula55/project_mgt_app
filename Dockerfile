@@ -4,45 +4,47 @@ FROM python:3.9-slim
 # Set working directory
 WORKDIR /app
 
-# Set environment variables
+# Set environment variables for memory optimization
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    DEBIAN_FRONTEND=noninteractive
+    DEBIAN_FRONTEND=noninteractive \
+    MALLOC_ARENA_MAX=2 \
+    PYTHONOPTIMIZE=1
 
-# Install system dependencies required for matplotlib and other packages
+# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libffi-dev \
-    libssl-dev \
     libjpeg-dev \
     zlib1g-dev \
-    libpq-dev \
+    curl \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements file first for better caching
+# Copy requirements file
 COPY requirements.txt .
 
 # Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --no-compile -r requirements.txt
 
-# Copy the rest of the application
+# Copy application
 COPY . .
 
-# Create necessary directories
-RUN mkdir -p /app/static/uploads /app/data /app/instance
+# Create directories
+RUN mkdir -p /app/static/uploads /app/data /app/instance && \
+    chmod -R 755 /app/static/uploads /app/data /app/instance
 
-# Create a non-root user to run the application
-RUN addgroup --system app && adduser --system --group app
-RUN chown -R app:app /app
+# Create non-root user
+RUN addgroup --system app && adduser --system --group app && \
+    chown -R app:app /app
+
 USER app
 
-# Expose port (default Flask port)
 EXPOSE 5000
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:5000/')" || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=45s --retries=3 \
+    CMD curl -f http://localhost:5000/health || exit 1
 
-# Run the application with gunicorn for production
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "4", "--threads", "2", "app:app"]
+# Run with Gunicorn
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "1", "--threads", "1", "--timeout", "30", "--graceful-timeout", "30", "--keep-alive", "5", "--max-requests", "1000", "--max-requests-jitter", "50", "--access-logfile", "-", "--error-logfile", "-", "--log-level", "info", "app:app"]
