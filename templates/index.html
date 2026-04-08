@@ -10,6 +10,9 @@
   <!-- Bootstrap Icons -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
   
+  <!-- Frappe Gantt CSS (integrated) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/frappe-gantt/0.5.0/frappe-gantt.css"/>
+  
   <!-- Google Fonts -->
   <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
 
@@ -361,6 +364,22 @@
     .media-indicator i {
       font-size: 0.8rem;
     }
+    
+    /* Media preview modal */
+    .media-preview-modal .modal-dialog {
+      max-width: 90%;
+      width: auto;
+    }
+    
+    .media-preview-content {
+      text-align: center;
+    }
+    
+    .media-preview-content img,
+    .media-preview-content video {
+      max-width: 100%;
+      max-height: 80vh;
+    }
 
     /* Project Action Buttons */
     .project-actions {
@@ -414,6 +433,30 @@
       color: white;
     }
 
+    /* Gantt Chart Styles (Frappe Gantt container) */
+    .gantt-card {
+      margin-top: 2rem;
+    }
+
+    .gantt-container {
+      background: var(--bg-card);
+      border-radius: 20px;
+      overflow-x: auto;
+      border: 1px solid var(--border-color);
+      padding: 1rem;
+    }
+    
+    #gantt-chart-wrapper {
+      min-height: 400px;
+      width: 100%;
+    }
+    
+    /* Ensure frappe-gantt canvas responsiveness */
+    .gantt-container .gantt-container-svg {
+      width: 100%;
+      height: auto;
+    }
+
     /* Mobile Styles */
     @media (max-width: 768px) {
       .sidebar {
@@ -460,6 +503,10 @@
         opacity: 1;
         top: 0.5rem;
         right: 0.5rem;
+      }
+
+      .gantt-card {
+        margin-top: 1.5rem;
       }
     }
 
@@ -558,6 +605,33 @@
         transform: translateX(0);
         opacity: 1;
       }
+    }
+    
+    /* Media thumbnail styles */
+    .media-thumbnail {
+      width: 40px;
+      height: 40px;
+      object-fit: cover;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+    
+    .media-thumbnail:hover {
+      transform: scale(1.05);
+    }
+    
+    .media-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 0.5rem;
+    }
+    
+    .task-media {
+      margin-top: 0.5rem;
+      padding-top: 0.5rem;
+      border-top: 1px solid var(--border-color);
     }
   </style>
 </head>
@@ -670,6 +744,39 @@
             </div>
           </div>
         </div>
+        <div class="stat-card">
+          <div class="d-flex justify-content-between align-items-center">
+            <div>
+              <p class="text-muted mb-1">Total Tasks</p>
+              <h3 class="mb-0">{{ total_tasks }}</h3>
+            </div>
+            <div class="rounded-circle bg-success bg-opacity-10 p-3">
+              <i class="bi bi-check2-square text-success fs-4"></i>
+            </div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="d-flex justify-content-between align-items-center">
+            <div>
+              <p class="text-muted mb-1">Avg Completion</p>
+              <h3 class="mb-0">{{ avg_completion }}%</h3>
+            </div>
+            <div class="rounded-circle bg-info bg-opacity-10 p-3">
+              <i class="bi bi-graph-up text-info fs-4"></i>
+            </div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="d-flex justify-content-between align-items-center">
+            <div>
+              <p class="text-muted mb-1">On Track</p>
+              <h3 class="mb-0">{{ on_track_count }}</h3>
+            </div>
+            <div class="rounded-circle bg-warning bg-opacity-10 p-3">
+              <i class="bi bi-trophy text-warning fs-4"></i>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Projects Grid -->
@@ -713,12 +820,20 @@
 
           <div class="tasks-container">
             {% for task in project.tasks %}
-            <div class="task-item">
+            <div class="task-item" data-task-id="{{ task.id }}" data-start="{{ task.start_date }}" data-end="{{ task.end_date }}" data-progress="{{ task.progress }}">
               <div class="d-flex justify-content-between align-items-start">
                 <div class="flex-grow-1">
-                  <strong class="task-name">{{ task.name }}</strong>
-                  {% if task.media_files|length > 0 %}
-                  <span class="media-indicator">
+                  <strong class="task-name">
+                    {% if task.name == 'Block work' %}
+                      Block and Form Work
+                    {% elif task.name == 'Plastering and finishing' %}
+                      Plastering and Painting
+                    {% else %}
+                      {{ task.name }}
+                    {% endif %}
+                  </strong>
+                  {% if task.media_files and task.media_files|length > 0 %}
+                  <span class="media-indicator" data-bs-toggle="modal" data-bs-target="#mediaModal{{ task.id }}" style="cursor: pointer;">
                     <i class="bi bi-paperclip"></i>
                     {{ task.media_files|length }}
                   </span>
@@ -744,7 +859,62 @@
                   <button type="submit" class="btn btn-sm btn-success py-0 px-2">✓</button>
                 </form>
               </div>
+              
+              <!-- Display media thumbnails for this task -->
+              {% if task.media_files and task.media_files|length > 0 %}
+              <div class="task-media">
+                <div class="media-list">
+                  {% for media in task.media_files[:3] %}
+                    {% if media.file_type == 'image' %}
+                      <img src="/static/uploads/{{ media.filename }}" class="media-thumbnail" alt="media" data-bs-toggle="modal" data-bs-target="#mediaViewerModal" onclick="showMediaPreview('/static/uploads/{{ media.filename }}', 'image')">
+                    {% else %}
+                      <video class="media-thumbnail" style="object-fit: cover;" data-bs-toggle="modal" data-bs-target="#mediaViewerModal" onclick="showMediaPreview('/static/uploads/{{ media.filename }}', 'video')">
+                        <source src="/static/uploads/{{ media.filename }}">
+                      </video>
+                    {% endif %}
+                  {% endfor %}
+                  {% if task.media_files|length > 3 %}
+                    <span class="badge bg-secondary" style="cursor: pointer;" data-bs-toggle="modal" data-bs-target="#mediaModal{{ task.id }}">+{{ task.media_files|length - 3 }} more</span>
+                  {% endif %}
+                </div>
+              </div>
+              {% endif %}
             </div>
+            
+            <!-- Media Modal for this task -->
+            {% if task.media_files and task.media_files|length > 0 %}
+            <div class="modal fade" id="mediaModal{{ task.id }}" tabindex="-1">
+              <div class="modal-dialog modal-lg modal-dialog-centered">
+                <div class="modal-content">
+                  <div class="modal-header">
+                    <h5 class="modal-title">Media Files - {{ task.name }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                  </div>
+                  <div class="modal-body">
+                    <div class="row g-3">
+                      {% for media in task.media_files %}
+                      <div class="col-md-4">
+                        <div class="card h-100">
+                          {% if media.file_type == 'image' %}
+                            <img src="/static/uploads/{{ media.filename }}" class="card-img-top" alt="{{ media.filename }}" style="height: 150px; object-fit: cover; cursor: pointer;" onclick="showMediaPreview('/static/uploads/{{ media.filename }}', 'image')">
+                          {% else %}
+                            <video class="card-img-top" style="height: 150px; object-fit: cover; cursor: pointer;" onclick="showMediaPreview('/static/uploads/{{ media.filename }}', 'video')">
+                              <source src="/static/uploads/{{ media.filename }}">
+                            </video>
+                          {% endif %}
+                          <div class="card-body p-2">
+                            <small class="text-muted d-block text-truncate">{{ media.filename }}</small>
+                            <small class="text-muted">{{ media.file_type }}</small>
+                          </div>
+                        </div>
+                      </div>
+                      {% endfor %}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            {% endif %}
             {% endfor %}
           </div>
 
@@ -765,6 +935,37 @@
         {% endfor %}
       </div>
 
+      <!-- Media Viewer Modal -->
+      <div class="modal fade" id="mediaViewerModal" tabindex="-1">
+        <div class="modal-dialog modal-xl modal-dialog-centered">
+          <div class="modal-content bg-dark">
+            <div class="modal-header border-0">
+              <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body text-center">
+              <div id="mediaViewerContent"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Frappe Gantt Chart Section (Integrated) -->
+      <div class="gantt-card">
+        <div class="card shadow-sm border-0 rounded-4 overflow-hidden">
+          <div class="card-header bg-white border-0 py-3 px-4">
+            <h5 class="fw-bold mb-0">
+              <i class="bi bi-bar-chart-steps text-primary me-2"></i> Project Gantt Timeline (Interactive)
+            </h5>
+            <p class="text-muted small mb-0 mt-1">Drag bars to update dates — changes persist to backend</p>
+          </div>
+          <div class="card-body p-4 pt-0">
+            <div class="gantt-container">
+              <div id="gantt"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {% if not projects %}
       <div class="text-center py-5">
         <i class="bi bi-inbox fs-1 text-muted"></i>
@@ -778,7 +979,7 @@
   </main>
 </div>
 
-<!-- Add Project Modal -->
+<!-- Modals (Add, Edit, Invite, Delete) -->
 <div class="modal fade" id="addProjectModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content border-0 shadow-lg">
@@ -796,7 +997,7 @@
             <label class="form-label fw-semibold">Project Type</label>
             <select name="type" class="form-select" required>
               <option value="Road">Road Construction</option>
-              <option value="Real Estate">Real Estate Development</option>
+              <option value="Building">Building Development</option>
             </select>
           </div>
           <div class="mb-3">
@@ -817,7 +1018,6 @@
   </div>
 </div>
 
-<!-- Edit Project Modal -->
 <div class="modal fade" id="editProjectModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content border-0 shadow-lg">
@@ -825,243 +1025,187 @@
         <h5 class="modal-title fw-bold">Edit Project</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
-      <form id="editProjectForm" method="POST">
+      <form id="editProjectForm" method="POST" action="/edit_project/0">
         <div class="modal-body">
-          <div class="mb-3">
-            <label class="form-label fw-semibold">Project Name</label>
-            <input type="text" name="name" id="editProjectName" class="form-control" required>
-          </div>
-          <div class="mb-3">
-            <label class="form-label fw-semibold">Project Type</label>
-            <select name="type" id="editProjectType" class="form-select" required>
-              <option value="Road">Road Construction</option>
-              <option value="Real Estate">Real Estate Development</option>
-            </select>
-          </div>
-          <div class="mb-3">
-            <label class="form-label fw-semibold">Start Date</label>
-            <input type="date" name="start_date" id="editStartDate" class="form-control">
-          </div>
-          <div class="mb-3">
-            <label class="form-label fw-semibold">End Date</label>
-            <input type="date" name="end_date" id="editEndDate" class="form-control">
-          </div>
+          <div class="mb-3"><label class="form-label fw-semibold">Project Name</label><input type="text" name="name" id="editProjectName" class="form-control" required></div>
+          <div class="mb-3"><label class="form-label fw-semibold">Project Type</label><select name="type" id="editProjectType" class="form-select"><option value="Road">Road Construction</option><option value="Building">Building Development</option></select></div>
+          <div class="mb-3"><label class="form-label fw-semibold">Start Date</label><input type="date" name="start_date" id="editStartDate" class="form-control"></div>
+          <div class="mb-3"><label class="form-label fw-semibold">End Date</label><input type="date" name="end_date" id="editEndDate" class="form-control"></div>
         </div>
-        <div class="modal-footer border-0 pt-0">
-          <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
-          <button type="submit" class="btn btn-primary-custom">Save Changes</button>
-        </div>
+        <div class="modal-footer border-0 pt-0"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-primary-custom">Save Changes</button></div>
       </form>
     </div>
   </div>
 </div>
 
-<!-- Invite Members Modal -->
 <div class="modal fade" id="inviteModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content border-0 shadow-lg">
-      <div class="modal-header border-0 pb-0">
-        <h5 class="modal-title fw-bold">Invite Team Members</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <form id="inviteForm" method="POST">
-        <div class="modal-body">
-          <p class="text-muted">Invite team members to <strong id="inviteProjectName"></strong></p>
-          <div class="mb-3">
-            <label class="form-label fw-semibold">Email Addresses</label>
-            <textarea name="emails" class="form-control" rows="4" placeholder="Enter email addresses separated by commas&#10;e.g., john@example.com, jane@example.com" required></textarea>
-            <small class="text-muted">Each member will receive an email invitation with a unique link to access this project.</small>
-          </div>
-        </div>
-        <div class="modal-footer border-0 pt-0">
-          <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
-          <button type="submit" class="btn btn-primary-custom">
-            <i class="bi bi-envelope"></i> Send Invitations
-          </button>
-        </div>
-      </form>
+      <div class="modal-header border-0 pb-0"><h5 class="modal-title fw-bold">Invite Team Members</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <form id="inviteForm" method="POST"><div class="modal-body"><p class="text-muted">Invite team members to <strong id="inviteProjectName"></strong></p><div class="mb-3"><label class="form-label fw-semibold">Email Addresses</label><textarea name="emails" class="form-control" rows="4" placeholder="Enter email addresses separated by commas" required></textarea><small class="text-muted">Each member will receive an email invitation.</small></div></div><div class="modal-footer border-0 pt-0"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-primary-custom"><i class="bi bi-envelope"></i> Send Invitations</button></div></form>
     </div>
   </div>
 </div>
 
-<!-- Delete Project Confirmation Modal -->
 <div class="modal fade" id="deleteProjectModal" tabindex="-1">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content border-0 shadow-lg">
-      <div class="modal-header border-0 pb-0">
-        <h5 class="modal-title fw-bold text-danger">Delete Project</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body">
-        <div class="text-center py-3">
-          <i class="bi bi-exclamation-triangle-fill text-danger fs-1 mb-3"></i>
-          <h6 class="mb-3">Are you sure you want to delete this project?</h6>
-          <p class="text-muted" id="deleteProjectMessage"></p>
-          <p class="small text-danger">This action cannot be undone. All tasks and media files will be permanently deleted.</p>
-        </div>
-      </div>
-      <div class="modal-footer border-0 pt-0">
-        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
-        <a href="#" id="confirmDeleteBtn" class="btn btn-danger">Delete Project</a>
-      </div>
-    </div>
-  </div>
+  <div class="modal-dialog modal-dialog-centered"><div class="modal-content border-0 shadow-lg"><div class="modal-header border-0 pb-0"><h5 class="modal-title fw-bold text-danger">Delete Project</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body text-center py-3"><i class="bi bi-exclamation-triangle-fill text-danger fs-1 mb-3"></i><h6 class="mb-3">Are you sure you want to delete this project?</h6><p class="text-muted" id="deleteProjectMessage"></p><p class="small text-danger">This action cannot be undone.</p></div><div class="modal-footer border-0 pt-0"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button><a href="#" id="confirmDeleteBtn" class="btn btn-danger">Delete Project</a></div></div></div>
 </div>
 
-<!-- Floating Action Button for Mobile -->
-<button class="btn btn-primary-custom rounded-circle position-fixed bottom-0 end-0 m-3 d-md-none" style="width: 56px; height: 56px; z-index: 1000;" data-bs-toggle="modal" data-bs-target="#addProjectModal">
-  <i class="bi bi-plus-lg fs-4"></i>
-</button>
+<button class="btn btn-primary-custom rounded-circle position-fixed bottom-0 end-0 m-3 d-md-none" style="width: 56px; height: 56px; z-index: 1000;" data-bs-toggle="modal" data-bs-target="#addProjectModal"><i class="bi bi-plus-lg fs-4"></i></button>
 
+<!-- Required Scripts: jQuery, Frappe Gantt, Bootstrap -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/frappe-gantt/0.5.0/frappe-gantt.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+
 <script>
-  // Sidebar toggle functionality
-  const sidebar = document.getElementById('sidebar');
-  const toggleBtn = document.getElementById('toggleSidebar');
-  const mobileMenuToggle = document.getElementById('mobileMenuToggle');
-  const mobileOverlay = document.getElementById('mobileOverlay');
-  let isCollapsed = false;
-
-  // Desktop sidebar toggle
-  toggleBtn.addEventListener('click', () => {
-    if (window.innerWidth > 768) {
-      isCollapsed = !isCollapsed;
-      if (isCollapsed) {
-        sidebar.classList.add('collapsed');
-      } else {
-        sidebar.classList.remove('collapsed');
-      }
-    }
-  });
-
-  // Mobile menu toggle
-  mobileMenuToggle.addEventListener('click', () => {
-    sidebar.classList.toggle('mobile-open');
-    mobileOverlay.classList.toggle('active');
-  });
-
-  mobileOverlay.addEventListener('click', () => {
-    sidebar.classList.remove('mobile-open');
-    mobileOverlay.classList.remove('active');
-  });
-
-  // Handle window resize
-  window.addEventListener('resize', () => {
-    if (window.innerWidth > 768) {
-      sidebar.classList.remove('mobile-open');
-      mobileOverlay.classList.remove('active');
+  // Media preview function
+  function showMediaPreview(src, type) {
+    const container = document.getElementById('mediaViewerContent');
+    if (type === 'image') {
+      container.innerHTML = `<img src="${src}" class="img-fluid" style="max-height: 80vh;">`;
     } else {
-      sidebar.classList.remove('collapsed');
+      container.innerHTML = `<video controls autoplay class="w-100" style="max-height: 80vh;"><source src="${src}"></video>`;
     }
-  });
-
-  // Auto-dismiss alerts and smooth scrolling
-  document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-    anchor.addEventListener('click', function(e) {
-      const target = document.querySelector(this.getAttribute('href'));
-      if (target && window.innerWidth < 768) {
-        e.preventDefault();
-        target.scrollIntoView({ behavior: 'smooth' });
-        sidebar.classList.remove('mobile-open');
-        mobileOverlay.classList.remove('active');
+  }
+  
+  // Collect tasks from the DOM (projects + tasks) for Frappe Gantt
+  function buildGanttTasksFromDOM() {
+    let tasksList = [];
+    document.querySelectorAll('.task-item').forEach(taskEl => {
+      const taskId = taskEl.dataset.taskId;
+      const taskNameEl = taskEl.querySelector('.task-name');
+      let rawName = taskNameEl ? taskNameEl.innerText.trim() : 'Unnamed';
+      const start = taskEl.dataset.start;
+      const end = taskEl.dataset.end;
+      let progressVal = parseFloat(taskEl.dataset.progress) || 0;
+      if (start && end) {
+        tasksList.push({
+          id: taskId,
+          name: rawName,
+          start: start,
+          end: end,
+          progress: progressVal / 100
+        });
       }
     });
-  });
-
-  // Edit Project Modal
-  function showEditProjectModal(projectId, projectName, projectType, startDate, endDate) {
-    const editForm = document.getElementById('editProjectForm');
-    editForm.action = `/edit_project/${projectId}`;
-    document.getElementById('editProjectName').value = projectName;
-    document.getElementById('editProjectType').value = projectType;
-    document.getElementById('editStartDate').value = startDate || '';
-    document.getElementById('editEndDate').value = endDate || '';
-    
-    const editModal = new bootstrap.Modal(document.getElementById('editProjectModal'));
-    editModal.show();
+    return tasksList;
   }
 
-  // Invite Members Modal
-  function showInviteModal(projectId, projectName) {
-    const inviteForm = document.getElementById('inviteForm');
-    inviteForm.action = `/invite_members/${projectId}`;
-    document.getElementById('inviteProjectName').textContent = projectName;
-    
-    const inviteModal = new bootstrap.Modal(document.getElementById('inviteModal'));
-    inviteModal.show();
+  let ganttChartInstance = null;
+
+  function renderFrappeGantt() {
+    const tasks = buildGanttTasksFromDOM();
+    const container = document.getElementById("gantt");
+    if (!container) return;
+    if (ganttChartInstance) {
+      container.innerHTML = '';
+    }
+    if (tasks.length === 0) {
+      container.innerHTML = '<div class="alert alert-light text-center p-4"><i class="bi bi-calendar-x"></i> No tasks with valid start/end dates. Add dates to tasks to view Gantt.</div>';
+      return;
+    }
+    try {
+      ganttChartInstance = new Gantt("#gantt", tasks, {
+        on_date_change: function(task, start, end) {
+          $.ajax({
+            url: '/update_task_gantt/' + task.id,
+            method: 'POST',
+            contentType: "application/json",
+            data: JSON.stringify({
+              start_date: start.toISOString().slice(0,10),
+              end_date: end.toISOString().slice(0,10)
+            }),
+            success: function(res) {
+              showToast(res.message || "Dates updated", "success");
+              const taskElement = document.querySelector(`.task-item[data-task-id='${task.id}']`);
+              if(taskElement) {
+                taskElement.dataset.start = start.toISOString().slice(0,10);
+                taskElement.dataset.end = end.toISOString().slice(0,10);
+              }
+            },
+            error: function(err) { showToast("Error updating task dates", "danger"); }
+          });
+        },
+        on_progress_change: function(task, progress) {
+          let progressPercent = Math.round(progress * 100);
+          $.ajax({
+            url: '/update_task_gantt/' + task.id,
+            method: 'POST',
+            contentType: "application/json",
+            data: JSON.stringify({progress: progressPercent}),
+            success: function(res) {
+              showToast(res.message || "Progress updated", "success");
+              const taskEl = document.querySelector(`.task-item[data-task-id='${task.id}']`);
+              if(taskEl) {
+                taskEl.dataset.progress = progressPercent;
+                const progressInput = taskEl.querySelector('.task-progress-input');
+                if(progressInput) progressInput.value = progressPercent;
+                const progressBar = taskEl.querySelector('.progress-bar');
+                if(progressBar) progressBar.style.width = progressPercent + '%';
+              }
+            },
+            error: function(err) { showToast("Error updating progress", "danger"); }
+          });
+        },
+        on_view_change: function(mode) { console.log("View changed to", mode); }
+      });
+    } catch(e) { console.error(e); container.innerHTML = '<div class="alert alert-danger">Error loading Gantt chart</div>'; }
   }
 
-  // Delete Project Confirmation
-  let currentDeleteProjectId = null;
-  
-  function confirmDeleteProject(projectId, projectName) {
-    currentDeleteProjectId = projectId;
-    const messageElement = document.getElementById('deleteProjectMessage');
-    messageElement.innerHTML = `Project: <strong>${projectName}</strong>`;
-    
-    const confirmBtn = document.getElementById('confirmDeleteBtn');
-    confirmBtn.href = `/delete_project/${projectId}`;
-    
-    const deleteModal = new bootstrap.Modal(document.getElementById('deleteProjectModal'));
-    deleteModal.show();
-  }
-
-  // Show toast notification (optional - for better UX)
   function showToast(message, type = 'success') {
-    const toastHtml = `
-      <div class="toast-notification">
-        <div class="toast align-items-center text-white bg-${type} border-0" role="alert" aria-live="assertive" aria-atomic="true" data-bs-autohide="true" data-bs-delay="3000">
-          <div class="d-flex">
-            <div class="toast-body">
-              <i class="bi bi-${type === 'success' ? 'check-circle-fill' : 'exclamation-triangle-fill'} me-2"></i>
-              ${message}
-            </div>
-            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
-          </div>
-        </div>
-      </div>
-    `;
-    
-    const container = document.createElement('div');
-    container.innerHTML = toastHtml;
-    document.body.appendChild(container);
-    
-    const toastElement = container.querySelector('.toast');
-    const toast = new bootstrap.Toast(toastElement, { autohide: true, delay: 3000 });
-    toast.show();
-    
-    toastElement.addEventListener('hidden.bs.toast', () => {
-      container.remove();
-    });
+    const toastHtml = `<div class="toast-notification"><div class="toast align-items-center text-white bg-${type} border-0" role="alert" data-bs-autohide="true" data-bs-delay="3000"><div class="d-flex"><div class="toast-body"><i class="bi bi-${type === 'success' ? 'check-circle-fill' : 'exclamation-triangle-fill'} me-2"></i>${message}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div></div></div>`;
+    const containerDiv = document.createElement('div'); containerDiv.innerHTML = toastHtml; document.body.appendChild(containerDiv);
+    const toastEl = containerDiv.querySelector('.toast'); const toast = new bootstrap.Toast(toastEl, { autohide: true, delay: 3000 }); toast.show();
+    toastEl.addEventListener('hidden.bs.toast', () => containerDiv.remove());
   }
 
-  // Check for URL parameters to show messages
-  const urlParams = new URLSearchParams(window.location.search);
-  const message = urlParams.get('message');
-  const error = urlParams.get('error');
-  
-  if (message) {
-    showToast(decodeURIComponent(message), 'success');
-    // Remove the parameter from URL without refreshing
-    const newUrl = window.location.pathname;
-    window.history.replaceState({}, document.title, newUrl);
+  // Sidebar & modals logic
+  const sidebar = document.getElementById('sidebar'), toggleBtn = document.getElementById('toggleSidebar'), mobileMenuToggle = document.getElementById('mobileMenuToggle'), mobileOverlay = document.getElementById('mobileOverlay');
+  let isCollapsed = false;
+  toggleBtn.addEventListener('click', () => { if(window.innerWidth > 768) { isCollapsed = !isCollapsed; sidebar.classList.toggle('collapsed', isCollapsed); } });
+  mobileMenuToggle?.addEventListener('click', () => { sidebar.classList.toggle('mobile-open'); mobileOverlay.classList.toggle('active'); });
+  mobileOverlay?.addEventListener('click', () => { sidebar.classList.remove('mobile-open'); mobileOverlay.classList.remove('active'); });
+  window.addEventListener('resize', () => { if(window.innerWidth > 768) { sidebar.classList.remove('mobile-open'); mobileOverlay.classList.remove('active'); } else sidebar.classList.remove('collapsed'); });
+
+  function showEditProjectModal(id, name, type, start, end) { 
+    const form = document.getElementById('editProjectForm'); 
+    form.action = `/edit_project/${id}`; 
+    document.getElementById('editProjectName').value = name; 
+    document.getElementById('editProjectType').value = type; 
+    document.getElementById('editStartDate').value = start || ''; 
+    document.getElementById('editEndDate').value = end || ''; 
+    new bootstrap.Modal(document.getElementById('editProjectModal')).show(); 
   }
   
-  if (error) {
-    showToast(decodeURIComponent(error), 'danger');
-    const newUrl = window.location.pathname;
-    window.history.replaceState({}, document.title, newUrl);
+  function showInviteModal(id, name) { 
+    document.getElementById('inviteForm').action = `/invite_members/${id}`; 
+    document.getElementById('inviteProjectName').innerText = name; 
+    new bootstrap.Modal(document.getElementById('inviteModal')).show(); 
+  }
+  
+  function confirmDeleteProject(id, name) { 
+    document.getElementById('deleteProjectMessage').innerHTML = `Project: <strong>${name}</strong>`; 
+    document.getElementById('confirmDeleteBtn').href = `/delete_project/${id}`; 
+    new bootstrap.Modal(document.getElementById('deleteProjectModal')).show(); 
   }
 
-  // Flash message handling
-  {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-      {% for category, message in messages %}
-        showToast('{{ message }}', '{{ category if category != "message" else "success" }}');
-      {% endfor %}
-    {% endif %}
-  {% endwith %}
+  // Initial render after DOM ready
+  document.addEventListener('DOMContentLoaded', function() {
+    renderFrappeGantt();
+    const observer = new MutationObserver(function(mutations) { renderFrappeGantt(); });
+    const projectsGrid = document.querySelector('.projects-grid');
+    if (projectsGrid) {
+      observer.observe(projectsGrid, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-start','data-end'] });
+    }
+    // Refresh gantt when any task update forms submit (optional but ensures sync)
+    document.querySelectorAll('form[action*="/update_task"]').forEach(form => { form.addEventListener('submit', () => setTimeout(renderFrappeGantt, 300)); });
+  });
+  
+  window.showToast = showToast;
+  {% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}{% for category, message in messages %}window.addEventListener('load', () => showToast('{{ message }}', '{{ category if category != "message" else "success" }}'));{% endfor %}{% endif %}{% endwith %}
+  const urlMsg = new URLSearchParams(window.location.search).get('message'); if(urlMsg) showToast(decodeURIComponent(urlMsg), 'success');
+  const urlErr = new URLSearchParams(window.location.search).get('error'); if(urlErr) showToast(decodeURIComponent(urlErr), 'danger');
 </script>
-
 </body>
 </html>

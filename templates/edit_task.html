@@ -1,423 +1,268 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Edit Task - {{ task.name }}</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
-    <style>
-        body {
-            font-family: 'Inter', system-ui, -apple-system, sans-serif;
-            background: linear-gradient(135deg, #f5f7fa 0%, #f0f2f5 100%);
-        }
-        
-        .media-card {
-            background: white;
-            border-radius: 12px;
-            overflow: hidden;
-            transition: transform 0.2s;
-            border: 1px solid #e2e8f0;
-        }
-        
-        .media-card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
-        }
-        
-        .media-preview {
-            width: 100%;
-            height: 200px;
-            object-fit: cover;
-            background: #f8fafc;
-        }
-        
-        .video-preview {
-            width: 100%;
-            height: 200px;
-            background: #1e293b;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            position: relative;
-        }
-        
-        .video-preview video {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-        
-        .play-overlay {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(0,0,0,0.7);
-            border-radius: 50%;
-            width: 50px;
-            height: 50px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        
-        .play-overlay:hover {
-            background: rgba(0,0,0,0.9);
-            transform: translate(-50%, -50%) scale(1.1);
-        }
-        
-        .upload-area {
-            border: 2px dashed #cbd5e1;
-            border-radius: 12px;
-            padding: 2rem;
-            text-align: center;
-            cursor: pointer;
-            transition: all 0.2s;
-            background: #f8fafc;
-        }
-        
-        .upload-area:hover {
-            border-color: #4361ee;
-            background: #f1f5f9;
-        }
-        
-        .upload-area.dragover {
-            border-color: #4361ee;
-            background: #e0e7ff;
-        }
-        
-        .file-input-label {
-            cursor: pointer;
-            display: inline-block;
-        }
-        
-        .btn-custom {
-            border-radius: 10px;
-            font-weight: 500;
-            transition: all 0.2s;
-        }
-        
-        .btn-primary-custom {
-            background: linear-gradient(135deg, #4361ee, #3f37c9);
-            border: none;
-            color: white;
-        }
-        
-        .btn-primary-custom:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(67, 97, 238, 0.3);
-        }
-        
-        .progress {
-            height: 8px;
-            border-radius: 4px;
-        }
-        
-        .modal-content {
-            border: none;
-            border-radius: 20px;
-        }
-    </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Edit Task - {{ task.name }}</title>
+
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+body {
+    font-family: 'Inter', sans-serif;
+    background: linear-gradient(135deg, #f5f7fa, #eef2f7);
+}
+.card {
+    border-radius: 16px;
+    border: none;
+}
+.btn-custom {
+    border-radius: 10px;
+}
+.btn-primary-custom {
+    background: linear-gradient(135deg, #4361ee, #3f37c9);
+    border: none;
+    color: #fff;
+}
+.btn-primary-custom:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(67, 97, 238, 0.3);
+}
+.upload-area {
+    border: 2px dashed #cbd5e1;
+    padding: 1.5rem;
+    text-align: center;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+.upload-area:hover {
+    border-color: #4361ee;
+    background: #f8fafc;
+}
+.media-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.media-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+}
+.media-thumb {
+    width: 100%;
+    height: 150px;
+    object-fit: cover;
+    border-radius: 8px;
+}
+.video-thumb {
+    width: 100%;
+    height: 150px;
+    background: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+}
+.video-thumb video {
+    width: 100%;
+    height: 150px;
+    object-fit: cover;
+}
+.file-info {
+    font-size: 0.75rem;
+    color: #64748b;
+    word-break: break-all;
+}
+</style>
 </head>
+
 <body class="p-4">
-    <div class="container">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <div>
-                <h2 class="fw-bold mb-0">Edit Task</h2>
-                <p class="text-muted">Update task details and upload media files</p>
-            </div>
-            <a href="{{ url_for('index') }}" class="btn btn-secondary btn-custom">
-                <i class="bi bi-arrow-left"></i> Back to Dashboard
-            </a>
-        </div>
 
-        <div class="row">
-            <div class="col-lg-6 mb-4">
-                <!-- Task Details Form -->
-                <div class="card border-0 shadow-sm">
-                    <div class="card-header bg-white border-0 pt-4 px-4">
-                        <h5 class="mb-0 fw-bold">Task Information</h5>
-                    </div>
-                    <div class="card-body p-4">
-                        <form method="POST" action="{{ url_for('edit_task', task_id=task.id) }}" enctype="multipart/form-data" id="taskForm">
-                            <div class="mb-3">
-                                <label for="name" class="form-label fw-semibold">Task Name</label>
-                                <input type="text" id="name" name="name" class="form-control" value="{{ task.name }}" required>
-                            </div>
-                            
-                            <div class="mb-4">
-                                <label for="progress" class="form-label fw-semibold">Progress (%)</label>
-                                <div class="d-flex align-items-center gap-3">
-                                    <input type="range" id="progressSlider" min="0" max="100" step="1" value="{{ task.progress }}" class="form-range flex-grow-1">
-                                    <input type="number" id="progress" name="progress" class="form-control" style="width: 80px;" value="{{ task.progress }}" min="0" max="100" step="1" required>
-                                </div>
-                                <div class="progress mt-2">
-                                    <div class="progress-bar bg-success" style="width: {{ task.progress }}%"></div>
-                                </div>
-                            </div>
-                            
-                            <!-- Image Upload Section -->
-                            <div class="mb-4">
-                                <label class="form-label fw-semibold">
-                                    <i class="bi bi-image"></i> Upload Images
-                                </label>
-                                <div class="upload-area" id="imageUploadArea">
-                                    <i class="bi bi-cloud-upload fs-1 text-muted"></i>
-                                    <p class="mb-2">Drag & drop images here or click to browse</p>
-                                    <small class="text-muted">Supports: JPG, JPEG, PNG (Max 100MB total)</small>
-                                    <input type="file" name="images" id="imageInput" class="d-none" multiple accept="image/jpeg,image/jpg,image/png">
-                                    <button type="button" class="btn btn-outline-primary mt-3 btn-custom" onclick="document.getElementById('imageInput').click()">
-                                        <i class="bi bi-folder2-open"></i> Browse Images
-                                    </button>
-                                </div>
-                                <div id="imagePreviewList" class="mt-3 row g-3"></div>
-                            </div>
-                            
-                            <!-- Video Upload Section -->
-                            <div class="mb-4">
-                                <label class="form-label fw-semibold">
-                                    <i class="bi bi-camera-reels"></i> Upload Videos
-                                </label>
-                                <div class="upload-area" id="videoUploadArea">
-                                    <i class="bi bi-cloud-upload fs-1 text-muted"></i>
-                                    <p class="mb-2">Drag & drop videos here or click to browse</p>
-                                    <small class="text-muted">Supports: MP4, MOV, AVI, MKV, WEBM (Max 100MB total)</small>
-                                    <input type="file" name="videos" id="videoInput" class="d-none" multiple accept="video/mp4,video/quicktime,video/x-msvideo,video/x-matroska,video/webm">
-                                    <button type="button" class="btn btn-outline-primary mt-3 btn-custom" onclick="document.getElementById('videoInput').click()">
-                                        <i class="bi bi-folder2-open"></i> Browse Videos
-                                    </button>
-                                </div>
-                                <div id="videoPreviewList" class="mt-3 row g-3"></div>
-                            </div>
-                            
-                            <div class="d-flex gap-3">
-                                <a href="{{ url_for('index') }}" class="btn btn-light btn-custom flex-grow-1">Cancel</a>
-                                <button type="submit" class="btn btn-primary-custom btn-custom flex-grow-1">
-                                    <i class="bi bi-check-lg"></i> Save Changes
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="col-lg-6 mb-4">
-                <!-- Existing Media Gallery -->
-                <div class="card border-0 shadow-sm">
-                    <div class="card-header bg-white border-0 pt-4 px-4">
-                        <h5 class="mb-0 fw-bold">
-                            <i class="bi bi-collection"></i> Media Gallery
-                            <span class="badge bg-secondary ms-2">{{ media_files|length }}</span>
-                        </h5>
-                    </div>
-                    <div class="card-body p-4">
-                        {% if media_files %}
-                            <div class="row g-3">
-                                {% for media in media_files %}
-                                    <div class="col-md-6">
-                                        <div class="media-card">
-                                            {% if media.file_type == 'image' %}
-                                                <img src="/static/uploads/{{ media.filename }}" alt="{{ media.filename }}" class="media-preview">
-                                            {% elif media.file_type == 'video' %}
-                                                <div class="video-preview">
-                                                    <video>
-                                                        <source src="/static/uploads/{{ media.filename }}" type="video/mp4">
-                                                    </video>
-                                                    <div class="play-overlay" onclick="this.parentElement.querySelector('video').play()">
-                                                        <i class="bi bi-play-fill fs-2"></i>
-                                                    </div>
-                                                </div>
-                                            {% endif %}
-                                            <div class="p-3">
-                                                <small class="text-muted d-block mb-2 text-truncate">{{ media.filename }}</small>
-                                                <div class="d-flex justify-content-between align-items-center">
-                                                    <span class="badge bg-info">{{ media.file_type|upper }}</span>
-                                                    <a href="/delete_media/{{ media.id }}" class="btn btn-sm btn-danger" onclick="return confirm('Delete this file?')">
-                                                        <i class="bi bi-trash"></i> Delete
-                                                    </a>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                {% endfor %}
-                            </div>
-                        {% else %}
-                            <div class="text-center py-5">
-                                <i class="bi bi-folder2-open fs-1 text-muted"></i>
-                                <p class="text-muted mt-3 mb-0">No media files uploaded yet</p>
-                                <small class="text-muted">Upload images or videos to track progress</small>
-                            </div>
-                        {% endif %}
-                    </div>
-                </div>
+<div class="container">
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h3 class="fw-bold">Edit Task</h3>
+        <small class="text-muted">Manage schedule, duration & media</small>
+    </div>
+    <a href="{{ url_for('index') }}" class="btn btn-secondary btn-custom">
+        <i class="bi bi-arrow-left"></i> Back
+    </a>
+</div>
+
+<div class="row">
+
+<!-- LEFT: TASK FORM -->
+<div class="col-lg-6">
+
+<div class="card shadow-sm p-4">
+<form method="POST" action="{{ url_for('edit_task', task_id=task.id) }}" enctype="multipart/form-data">
+
+<!-- Task Name -->
+<div class="mb-3">
+<label class="form-label fw-semibold">Task Name</label>
+<input type="text" name="name" class="form-control" value="{{ task.name }}" required>
+</div>
+
+<!-- Progress -->
+<div class="mb-3">
+<label class="form-label fw-semibold">Progress (%)</label>
+<input type="range" id="progressSlider" class="form-range" value="{{ task.progress }}">
+<input type="number" id="progress" name="progress" class="form-control mt-2" value="{{ task.progress }}" min="0" max="100">
+</div>
+
+<hr>
+
+<!-- Timeline Section -->
+<h6 class="fw-bold mb-3"><i class="bi bi-calendar3"></i> Task Timeline</h6>
+
+<!-- Start Date -->
+<div class="mb-3">
+<label class="form-label">Start Date</label>
+<input type="date" id="start_date" name="start_date" class="form-control"
+       value="{{ task.start_date }}">
+</div>
+
+<!-- Duration -->
+<div class="mb-3">
+<label class="form-label">Duration (Days)</label>
+<input type="number" id="duration" name="duration" class="form-control"
+       value="{{ task.duration_days or 1 }}" min="1">
+<small class="text-muted">Must not exceed project duration ({{ project.duration_days }} days)</small>
+</div>
+
+<!-- End Date -->
+<div class="mb-3">
+<label class="form-label">End Date (Auto-calculated)</label>
+<input type="date" id="end_date" name="end_date" class="form-control"
+       value="{{ task.end_date }}" readonly>
+</div>
+
+<hr>
+
+<!-- Upload Images -->
+<div class="mb-3">
+<label class="fw-semibold mb-2">Upload Images</label>
+<div class="upload-area" onclick="document.getElementById('imageInput').click()">
+    <i class="bi bi-image fs-2 text-muted"></i>
+    <p class="mb-0 mt-2">Click to select images</p>
+    <small class="text-muted">Supports: JPG, JPEG, PNG, GIF, WEBP</small>
+</div>
+<input type="file" name="images" id="imageInput" class="d-none" multiple accept="image/jpeg,image/jpg,image/png,image/gif,image/webp">
+</div>
+
+<!-- Upload Videos -->
+<div class="mb-3">
+<label class="fw-semibold mb-2">Upload Videos</label>
+<div class="upload-area" onclick="document.getElementById('videoInput').click()">
+    <i class="bi bi-camera-reels fs-2 text-muted"></i>
+    <p class="mb-0 mt-2">Click to select videos</p>
+    <small class="text-muted">Supports: MP4, MOV, AVI, MKV, WEBM</small>
+</div>
+<input type="file" name="videos" id="videoInput" class="d-none" multiple accept="video/mp4,video/quicktime,video/x-msvideo,video/x-matroska,video/webm">
+</div>
+
+<!-- Buttons -->
+<div class="d-flex gap-2">
+<a href="{{ url_for('index') }}" class="btn btn-light w-50">Cancel</a>
+<button type="submit" class="btn btn-primary-custom w-50">Save Changes</button>
+</div>
+
+</form>
+</div>
+</div>
+
+<!-- RIGHT: MEDIA DISPLAY -->
+<div class="col-lg-6">
+
+<div class="card shadow-sm p-4">
+<h6 class="fw-bold mb-3"><i class="bi bi-paperclip"></i> Media Files</h6>
+
+{% if media_files and media_files|length > 0 %}
+<div class="row g-3">
+{% for media in media_files %}
+<div class="col-md-6">
+    <div class="media-card border rounded p-2 bg-white">
+        {% if media.file_type == 'image' %}
+        <img src="/static/uploads/{{ media.filename }}" class="media-thumb" alt="{{ media.filename }}">
+        {% else %}
+        <div class="video-thumb">
+            <video class="w-100 h-100" style="object-fit: cover;">
+                <source src="/static/uploads/{{ media.filename }}">
+            </video>
+        </div>
+        {% endif %}
+        <div class="mt-2">
+            <small class="file-info">
+                <i class="bi bi-{{ 'image' if media.file_type == 'image' else 'camera-reels' }}"></i>
+                {{ media.filename[:20] }}{% if media.filename|length > 20 %}...{% endif %}
+            </small>
+            <div class="d-flex justify-content-between align-items-center mt-1">
+                <small class="text-muted">{{ media.file_type }}</small>
+                <a href="/delete_media/{{ media.id }}" class="text-danger" onclick="return confirm('Delete this media file?')">
+                    <i class="bi bi-trash"></i> Delete
+                </a>
             </div>
         </div>
     </div>
+</div>
+{% endfor %}
+</div>
+{% else %}
+<div class="text-center py-5">
+    <i class="bi bi-folder2-open fs-1 text-muted"></i>
+    <p class="text-muted mt-3 mb-0">No media files uploaded yet</p>
+    <small class="text-muted">Upload images or videos from the left panel</small>
+</div>
+{% endif %}
 
-    <!-- Video Modal -->
-    <div class="modal fade" id="videoModal" tabindex="-1">
-        <div class="modal-dialog modal-lg modal-dialog-centered">
-            <div class="modal-content bg-dark">
-                <div class="modal-header border-0">
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body p-0">
-                    <video id="modalVideo" controls style="width: 100%; max-height: 70vh;">
-                        <source src="" type="video/mp4">
-                    </video>
-                </div>
-            </div>
-        </div>
-    </div>
+</div>
+</div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        // Progress slider sync
-        const progressSlider = document.getElementById('progressSlider');
-        const progressInput = document.getElementById('progress');
-        
-        progressSlider.addEventListener('input', function() {
-            progressInput.value = this.value;
-        });
-        
-        progressInput.addEventListener('input', function() {
-            progressSlider.value = this.value;
-        });
-        
-        // Image preview
-        const imageInput = document.getElementById('imageInput');
-        const imagePreviewList = document.getElementById('imagePreviewList');
-        
-        imageInput.addEventListener('change', function() {
-            imagePreviewList.innerHTML = '';
-            const files = Array.from(this.files);
-            files.forEach((file, index) => {
-                if (file.type.startsWith('image/')) {
-                    const reader = new FileReader();
-                    reader.onload = function(e) {
-                        const col = document.createElement('div');
-                        col.className = 'col-md-4';
-                        col.innerHTML = `
-                            <div class="media-card">
-                                <img src="${e.target.result}" class="media-preview" alt="Preview">
-                                <div class="p-2">
-                                    <small class="text-muted d-block text-truncate">${file.name}</small>
-                                    <small class="text-muted">${(file.size / 1024 / 1024).toFixed(2)} MB</small>
-                                </div>
-                            </div>
-                        `;
-                        imagePreviewList.appendChild(col);
-                    };
-                    reader.readAsDataURL(file);
-                }
-            });
-        });
-        
-        // Video preview
-        const videoInput = document.getElementById('videoInput');
-        const videoPreviewList = document.getElementById('videoPreviewList');
-        
-        videoInput.addEventListener('change', function() {
-            videoPreviewList.innerHTML = '';
-            const files = Array.from(this.files);
-            files.forEach((file, index) => {
-                if (file.type.startsWith('video/')) {
-                    const reader = new FileReader();
-                    reader.onload = function(e) {
-                        const col = document.createElement('div');
-                        col.className = 'col-md-4';
-                        col.innerHTML = `
-                            <div class="media-card">
-                                <div class="video-preview">
-                                    <video>
-                                        <source src="${e.target.result}" type="${file.type}">
-                                    </video>
-                                    <div class="play-overlay" onclick="this.parentElement.querySelector('video').play()">
-                                        <i class="bi bi-play-fill"></i>
-                                    </div>
-                                </div>
-                                <div class="p-2">
-                                    <small class="text-muted d-block text-truncate">${file.name}</small>
-                                    <small class="text-muted">${(file.size / 1024 / 1024).toFixed(2)} MB</small>
-                                </div>
-                            </div>
-                        `;
-                        videoPreviewList.appendChild(col);
-                    };
-                    reader.readAsDataURL(file);
-                }
-            });
-        });
-        
-        // Drag and drop functionality
-        const imageUploadArea = document.getElementById('imageUploadArea');
-        const videoUploadArea = document.getElementById('videoUploadArea');
-        
-        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-            imageUploadArea.addEventListener(eventName, preventDefaults, false);
-            videoUploadArea.addEventListener(eventName, preventDefaults, false);
-        });
-        
-        function preventDefaults(e) {
-            e.preventDefault();
-            e.stopPropagation();
-        }
-        
-        ['dragenter', 'dragover'].forEach(eventName => {
-            imageUploadArea.addEventListener(eventName, highlight, false);
-            videoUploadArea.addEventListener(eventName, highlight, false);
-        });
-        
-        ['dragleave', 'drop'].forEach(eventName => {
-            imageUploadArea.addEventListener(eventName, unhighlight, false);
-            videoUploadArea.addEventListener(eventName, unhighlight, false);
-        });
-        
-        function highlight(e) {
-            this.classList.add('dragover');
-        }
-        
-        function unhighlight(e) {
-            this.classList.remove('dragover');
-        }
-        
-        imageUploadArea.addEventListener('drop', handleImageDrop, false);
-        videoUploadArea.addEventListener('drop', handleVideoDrop, false);
-        
-        function handleImageDrop(e) {
-            const dt = e.dataTransfer;
-            const files = dt.files;
-            imageInput.files = files;
-            const event = new Event('change');
-            imageInput.dispatchEvent(event);
-        }
-        
-        function handleVideoDrop(e) {
-            const dt = e.dataTransfer;
-            const files = dt.files;
-            videoInput.files = files;
-            const event = new Event('change');
-            videoInput.dispatchEvent(event);
-        }
-        
-        // Video modal
-        const videoModal = new bootstrap.Modal(document.getElementById('videoModal'));
-        const modalVideo = document.getElementById('modalVideo');
-        
-        document.querySelectorAll('.play-overlay').forEach(overlay => {
-            overlay.addEventListener('click', function() {
-                const video = this.parentElement.querySelector('video');
-                const source = video.querySelector('source');
-                modalVideo.querySelector('source').src = source.src;
-                modalVideo.load();
-                videoModal.show();
-            });
-        });
-    </script>
+</div>
+</div>
+
+<script>
+
+// Sync progress
+const slider = document.getElementById('progressSlider');
+const input = document.getElementById('progress');
+
+slider.oninput = () => input.value = slider.value;
+input.oninput = () => slider.value = input.value;
+
+
+// Auto-calculate End Date
+function calculateEndDate() {
+    const start = document.getElementById("start_date").value;
+    const duration = parseInt(document.getElementById("duration").value);
+    const projectDuration = {{ project.duration_days or 0 }};
+
+    if (!start || !duration) return;
+
+    // Enforce duration rule
+    if (duration > projectDuration && projectDuration > 0) {
+        alert("Task duration cannot exceed project duration!");
+        document.getElementById("duration").value = projectDuration;
+        return;
+    }
+
+    let startDate = new Date(start);
+    startDate.setDate(startDate.getDate() + duration);
+
+    let endDate = startDate.toISOString().split('T')[0];
+    document.getElementById("end_date").value = endDate;
+}
+
+document.getElementById("start_date").addEventListener("change", calculateEndDate);
+document.getElementById("duration").addEventListener("input", calculateEndDate);
+
+
+// Run on load
+window.onload = calculateEndDate;
+
+</script>
+
 </body>
 </html>
