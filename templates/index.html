@@ -2,18 +2,13 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>PM Scheduler/Monitor</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=yes" />
+  <title>FlowTrack · Project Scheduler & Monitor</title>
 
-  <!-- Bootstrap 5 -->
+  <!-- Bootstrap 5 + Icons + Frappe Gantt + Google Fonts -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <!-- Bootstrap Icons -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
-  
-  <!-- Frappe Gantt CSS (integrated) -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/frappe-gantt/0.5.0/frappe-gantt.css"/>
-  
-  <!-- Google Fonts -->
   <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
 
   <style>
@@ -24,562 +19,412 @@
     }
 
     :root {
-      --sidebar-width: 280px;
-      --sidebar-collapsed-width: 80px;
-      --accent-primary: #4361ee;
-      --accent-secondary: #3f37c9;
-      --accent-success: #4cc9f0;
-      --bg-dark: #f8fafc;
-      --bg-card: #ffffff;
-      --text-primary: #1e293b;
-      --text-secondary: #64748b;
-      --border-color: #e2e8f0;
-      --shadow-sm: 0 1px 3px rgba(0,0,0,0.05);
-      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.05);
-      --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.05);
-      --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      --sidebar-width: 270px;
+      --accent-primary: #3b82f6;
+      --accent-secondary: #2563eb;
+      --accent-soft: #eff6ff;
+      --accent-danger: #ef4444;
+      --text-dark: #0f172a;
+      --text-muted: #475569;
+      --border-light: #e9eef3;
+      --card-radius: 1.25rem;
+      --shadow-sm: 0 8px 20px rgba(0,0,0,0.02), 0 2px 6px rgba(0,0,0,0.05);
+      --shadow-md: 0 14px 30px rgba(0,0,0,0.08);
+      --transition: 0.25s ease-in-out;
+    }
+
+    html, body {
+      height: 100%;
     }
 
     body {
-      font-family: 'Inter', system-ui, -apple-system, sans-serif;
-      background: linear-gradient(135deg, #f5f7fa 0%, #f0f2f5 100%);
-      color: var(--text-primary);
+      font-family: 'Inter', sans-serif;
+      background: #f8fafc;
       overflow-x: hidden;
+      color: var(--text-dark);
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
     }
 
-    /* App Container */
+    a, button, input, select, textarea {
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    button:active {
+      transform: scale(0.98);
+    }
+
     .app-container {
       display: flex;
       min-height: 100vh;
       position: relative;
     }
 
-    /* Sidebar Styles */
     .sidebar {
       width: var(--sidebar-width);
-      background: var(--bg-card);
-      border-right: 1px solid var(--border-color);
-      display: flex;
-      flex-direction: column;
+      background: #fff;
+      border-right: 1px solid var(--border-light);
       position: fixed;
+      top: 0;
+      left: 0;
       height: 100vh;
+      z-index: 1050;
+      transition: transform var(--transition), box-shadow var(--transition);
+      box-shadow: var(--shadow-sm);
       overflow-y: auto;
-      transition: var(--transition);
-      z-index: 1000;
-      box-shadow: var(--shadow-md);
-    }
-
-    .sidebar.collapsed {
-      width: var(--sidebar-collapsed-width);
+      -webkit-overflow-scrolling: touch;
     }
 
     .sidebar-header {
-      padding: 1.5rem;
-      border-bottom: 1px solid var(--border-color);
+      padding: 1.35rem 1.25rem;
+      border-bottom: 1px solid var(--border-light);
+      position: sticky;
+      top: 0;
+      background: #fff;
+      z-index: 2;
     }
 
     .logo {
       display: flex;
       align-items: center;
-      gap: 0.75rem;
+      gap: 12px;
     }
 
     .logo-icon {
-      width: 32px;
-      height: 32px;
       background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
-      border-radius: 8px;
+      width: 44px;
+      height: 44px;
+      border-radius: 14px;
       display: flex;
       align-items: center;
       justify-content: center;
-    }
-
-    .logo-icon i {
       color: white;
-      font-size: 1.2rem;
+      font-size: 1.4rem;
+      flex: 0 0 auto;
+      box-shadow: 0 8px 16px rgba(37, 99, 235, 0.18);
     }
 
     .logo-text h3 {
-      font-size: 1rem;
-      font-weight: 700;
+      font-size: 1.15rem;
+      font-weight: 800;
       margin: 0;
-      background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
+      line-height: 1.2;
+      letter-spacing: -0.02em;
     }
 
     .logo-text p {
-      font-size: 0.7rem;
-      color: var(--text-secondary);
+      font-size: 0.72rem;
+      color: var(--text-muted);
       margin: 0;
     }
 
-    .sidebar.collapsed .logo-text,
-    .sidebar.collapsed .nav-label {
-      display: none;
-    }
-
-    .sidebar.collapsed .logo {
-      justify-content: center;
-    }
-
-    /* Navigation */
     .nav-menu {
-      flex: 1;
-      padding: 1.5rem 1rem;
+      padding: 1.25rem 1rem 1.5rem;
     }
 
     .nav-item {
-      margin-bottom: 0.5rem;
+      margin-bottom: 0.45rem;
     }
 
     .nav-link-custom {
       display: flex;
       align-items: center;
-      gap: 0.75rem;
-      padding: 0.75rem 1rem;
-      border-radius: 10px;
-      color: var(--text-secondary);
+      gap: 12px;
+      padding: 0.78rem 1rem;
+      border-radius: 14px;
+      color: var(--text-muted);
+      font-weight: 600;
+      transition: all 0.2s ease;
       text-decoration: none;
-      transition: var(--transition);
-      font-weight: 500;
-    }
-
-    .nav-link-custom:hover {
-      background: #f1f5f9;
-      color: var(--accent-primary);
-    }
-
-    .nav-link-custom.active {
-      background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
-      color: white;
     }
 
     .nav-link-custom i {
-      font-size: 1.25rem;
-      width: 24px;
+      font-size: 1.2rem;
     }
 
-    /* Main Content */
-    .main-content {
-      flex: 1;
-      margin-left: var(--sidebar-width);
-      transition: var(--transition);
-    }
-
-    .sidebar.collapsed ~ .main-content {
-      margin-left: var(--sidebar-collapsed-width);
-    }
-
-    /* Top Bar */
-    .top-bar {
-      background: var(--bg-card);
-      border-bottom: 1px solid var(--border-color);
-      padding: 1rem 2rem;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      position: sticky;
-      top: 0;
-      z-index: 999;
-      backdrop-filter: blur(10px);
-      background: rgba(255, 255, 255, 0.95);
-    }
-
-    .toggle-sidebar {
-      background: none;
-      border: none;
-      font-size: 1.25rem;
-      cursor: pointer;
-      color: var(--text-secondary);
-      padding: 0.5rem;
-      border-radius: 8px;
-      transition: var(--transition);
-    }
-
-    .toggle-sidebar:hover {
-      background: #f1f5f9;
+    .nav-link-custom.active,
+    .nav-link-custom:hover {
+      background: var(--accent-soft);
       color: var(--accent-primary);
     }
 
-    .search-bar {
+    .main-content {
+      margin-left: var(--sidebar-width);
+      width: 100%;
+      min-width: 0;
+      transition: margin var(--transition);
+    }
+
+    .top-bar {
+      background: rgba(255,255,255,0.96);
+      backdrop-filter: blur(12px);
+      padding: 0.85rem 1.25rem;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      border-bottom: 1px solid var(--border-light);
+      position: sticky;
+      top: 0;
+      z-index: 1020;
+    }
+
+    .top-bar-left,
+    .top-bar-right {
       display: flex;
       align-items: center;
+      gap: 0.75rem;
+      min-width: 0;
+      flex-wrap: wrap;
+    }
+
+    .btn-icon-round {
       background: #f1f5f9;
-      border-radius: 12px;
-      padding: 0.5rem 1rem;
-      width: 300px;
-    }
-
-    .search-bar i {
-      color: var(--text-secondary);
-    }
-
-    .search-bar input {
       border: none;
-      background: none;
-      padding: 0 0.5rem;
+      width: 42px;
+      height: 42px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: 0.2s ease;
+      color: #334155;
+      flex: 0 0 auto;
+    }
+
+    .btn-icon-round:hover {
+      background: #e2e8f0;
+    }
+
+    .search-wrapper {
+      background: #f1f5f9;
+      border-radius: 999px;
+      padding: 0.48rem 1rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: min(100%, 360px);
+      min-width: 0;
+      border: 1px solid transparent;
+    }
+
+    .search-wrapper:focus-within {
+      border-color: rgba(59,130,246,0.25);
+      background: #fff;
+      box-shadow: 0 0 0 4px rgba(59,130,246,0.08);
+    }
+
+    .search-wrapper i {
+      color: #94a3b8;
+      flex: 0 0 auto;
+    }
+
+    .search-wrapper input {
+      background: transparent;
+      border: none;
       outline: none;
       width: 100%;
-      font-size: 0.875rem;
+      font-size: 0.92rem;
+      min-width: 0;
+      color: var(--text-dark);
     }
 
-    /* Stats Cards */
+    .btn-pill {
+      border-radius: 999px;
+      padding-left: 1rem;
+      padding-right: 1rem;
+      font-weight: 600;
+    }
+
     .stats-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-      gap: 1.5rem;
-      margin-bottom: 2rem;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1.35rem;
     }
 
     .stat-card {
-      background: var(--bg-card);
-      border-radius: 16px;
-      padding: 1.5rem;
+      background: white;
+      border-radius: 1.25rem;
+      padding: 1rem 1.1rem;
+      border: 1px solid var(--border-light);
       box-shadow: var(--shadow-sm);
-      border: 1px solid var(--border-color);
-      transition: var(--transition);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      min-width: 0;
     }
 
     .stat-card:hover {
       transform: translateY(-2px);
-      box-shadow: var(--shadow-lg);
+      box-shadow: var(--shadow-md);
     }
 
-    /* Project Cards */
     .projects-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
-      gap: 1.5rem;
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      gap: 1.25rem;
+      margin: 1.2rem 0 1.8rem;
     }
 
     .project-card {
-      background: var(--bg-card);
-      border-radius: 20px;
-      border: 1px solid var(--border-color);
+      background: white;
+      border-radius: var(--card-radius);
+      border: 1px solid var(--border-light);
+      transition: all 0.2s ease;
       overflow: hidden;
-      transition: var(--transition);
-      position: relative;
+      box-shadow: var(--shadow-sm);
+      min-width: 0;
     }
 
     .project-card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 20px 25px -12px rgba(0,0,0,0.1);
+      transform: translateY(-2px);
+      box-shadow: 0 12px 24px rgba(0,0,0,0.08);
     }
 
     .project-header {
-      padding: 1.25rem;
-      background: linear-gradient(135deg, #f8fafc, #ffffff);
-      border-bottom: 1px solid var(--border-color);
-      position: relative;
+      padding: 1rem 1.1rem;
+      border-bottom: 1px solid #f0f2f5;
+      background: linear-gradient(180deg, #fff 0%, #fbfdff 100%);
     }
 
     .project-title {
-      font-size: 1.1rem;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    .progress-badge {
+      background: #eef2ff;
+      color: #3730a3;
+      padding: 0.3rem 0.85rem;
+      border-radius: 999px;
       font-weight: 700;
-      margin: 0;
-      display: flex;
-      justify-content: space-between;
-      align-items: start;
+      font-size: 0.9rem;
+      white-space: nowrap;
     }
 
-    .project-badge {
-      background: #e0e7ff;
-      color: var(--accent-primary);
-      padding: 0.25rem 0.75rem;
-      border-radius: 20px;
-      font-size: 0.7rem;
-      font-weight: 600;
-    }
-
-    .progress-circle {
-      width: 60px;
-      height: 60px;
-      position: relative;
-    }
-
-    .tasks-container {
-      padding: 1.25rem;
-      max-height: 400px;
-      overflow-y: auto;
-    }
-
-    .task-item {
-      background: #f8fafc;
-      border-radius: 12px;
-      padding: 0.75rem;
-      margin-bottom: 0.75rem;
-      transition: var(--transition);
-    }
-
-    .task-item:hover {
-      background: #f1f5f9;
-    }
-
-    .task-progress {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      margin-top: 0.5rem;
-    }
-
-    .task-progress-input {
-      width: 70px;
-      padding: 0.25rem;
-      border: 1px solid var(--border-color);
-      border-radius: 6px;
-      font-size: 0.75rem;
-    }
-
-    .action-buttons {
-      display: flex;
-      gap: 0.5rem;
-      opacity: 0;
-      transition: var(--transition);
-    }
-
-    .task-item:hover .action-buttons {
-      opacity: 1;
-    }
-
-    .card-footer {
-      padding: 1rem 1.25rem;
-      background: #f8fafc;
-      border-top: 1px solid var(--border-color);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    /* Media Indicators */
-    .media-indicator {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.25rem;
-      font-size: 0.7rem;
-      color: var(--text-secondary);
-      margin-left: 0.5rem;
-    }
-
-    .media-indicator i {
-      font-size: 0.8rem;
-    }
-    
-    /* Media preview modal */
-    .media-preview-modal .modal-dialog {
-      max-width: 90%;
-      width: auto;
-    }
-    
-    .media-preview-content {
-      text-align: center;
-    }
-    
-    .media-preview-content img,
-    .media-preview-content video {
-      max-width: 100%;
-      max-height: 80vh;
-    }
-
-    /* Project Action Buttons */
     .project-actions {
-      position: absolute;
-      top: 1rem;
-      right: 1rem;
       display: flex;
-      gap: 0.5rem;
-      opacity: 0;
-      transition: var(--transition);
-    }
-
-    .project-card:hover .project-actions {
-      opacity: 1;
+      gap: 10px;
+      margin-top: 12px;
+      flex-wrap: wrap;
     }
 
     .project-action-btn {
-      background: white;
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      padding: 0.25rem 0.5rem;
-      font-size: 0.75rem;
-      transition: var(--transition);
-      text-decoration: none;
+      background: transparent;
+      border: 1px solid var(--border-light);
+      border-radius: 999px;
+      padding: 0.35rem 0.9rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+      transition: all 0.2s ease;
+      color: var(--text-dark);
       display: inline-flex;
       align-items: center;
-      gap: 0.25rem;
+      gap: 0.4rem;
     }
 
     .project-action-btn:hover {
-      transform: translateY(-1px);
-    }
-
-    .project-action-btn.delete-btn {
-      color: #dc3545;
-      border-color: #dc3545;
-    }
-
-    .project-action-btn.delete-btn:hover {
-      background: #dc3545;
-      color: white;
+      background: #f8fafc;
+      border-color: #dbe3ea;
     }
 
     .project-action-btn.edit-btn {
       color: var(--accent-primary);
-      border-color: var(--accent-primary);
+      border-color: rgba(59,130,246,0.25);
     }
 
-    .project-action-btn.edit-btn:hover {
-      background: var(--accent-primary);
-      color: white;
+    .project-action-btn.delete-btn {
+      color: var(--accent-danger);
+      border-color: rgba(239,68,68,0.25);
     }
 
-    /* Gantt Chart Styles (Frappe Gantt container) */
+    .project-action-btn.delete-btn:hover {
+      background: rgba(239,68,68,0.05);
+    }
+
+    .task-item {
+      background: #fefefe;
+      border-radius: 1rem;
+      padding: 0.9rem;
+      margin-bottom: 0.75rem;
+      border: 1px solid #edf2f7;
+      transition: all 0.2s ease;
+    }
+
+    .task-item:hover {
+      background: #ffffff;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.04);
+    }
+
+    .task-name {
+      word-break: break-word;
+    }
+
+    .task-progress {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+      margin-top: 8px;
+    }
+
+    .task-progress-input {
+      width: 72px;
+      border-radius: 999px;
+      border: 1px solid #cbd5e1;
+      text-align: center;
+      padding: 0.25rem 0.5rem;
+      font-size: 0.9rem;
+    }
+
+    .task-meta {
+      line-height: 1.4;
+    }
+
     .gantt-card {
       margin-top: 2rem;
-    }
-
-    .gantt-container {
-      background: var(--bg-card);
-      border-radius: 20px;
-      overflow-x: auto;
-      border: 1px solid var(--border-color);
+      background: white;
+      border-radius: var(--card-radius);
+      border: 1px solid var(--border-light);
       padding: 1rem;
-    }
-    
-    #gantt-chart-wrapper {
-      min-height: 400px;
-      width: 100%;
-    }
-    
-    /* Ensure frappe-gantt canvas responsiveness */
-    .gantt-container .gantt-container-svg {
-      width: 100%;
-      height: auto;
+      overflow-x: auto;
+      box-shadow: var(--shadow-sm);
     }
 
-    /* Mobile Styles */
-    @media (max-width: 768px) {
-      .sidebar {
-        transform: translateX(-100%);
-        position: fixed;
-        z-index: 1050;
-      }
-
-      .sidebar.mobile-open {
-        transform: translateX(0);
-      }
-
-      .main-content {
-        margin-left: 0 !important;
-      }
-
-      .top-bar {
-        padding: 1rem;
-      }
-
-      .search-bar {
-        width: 100%;
-        max-width: 200px;
-      }
-
-      .projects-grid {
-        grid-template-columns: 1fr;
-      }
-
-      .stats-grid {
-        grid-template-columns: 1fr;
-        gap: 1rem;
-      }
-
-      .action-buttons {
-        opacity: 1;
-      }
-
-      .stat-card {
-        padding: 1rem;
-      }
-
-      .project-actions {
-        opacity: 1;
-        top: 0.5rem;
-        right: 0.5rem;
-      }
-
-      .gantt-card {
-        margin-top: 1.5rem;
-      }
+    .gantt-card .card-header {
+      background: transparent;
     }
 
-    /* Tablet Styles */
-    @media (min-width: 769px) and (max-width: 1024px) {
-      .projects-grid {
-        grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-      }
+    #gantt {
+      min-width: 580px;
     }
 
-    /* Custom Scrollbar */
-    ::-webkit-scrollbar {
-      width: 6px;
-      height: 6px;
-    }
-
-    ::-webkit-scrollbar-track {
-      background: #f1f5f9;
-    }
-
-    ::-webkit-scrollbar-thumb {
-      background: #cbd5e1;
-      border-radius: 3px;
-    }
-
-    ::-webkit-scrollbar-thumb:hover {
-      background: #94a3b8;
-    }
-
-    /* Animations */
-    @keyframes fadeInUp {
-      from {
-        opacity: 0;
-        transform: translateY(20px);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-
-    .project-card {
-      animation: fadeInUp 0.4s ease-out;
-    }
-
-    /* Button Styles */
-    .btn-custom {
-      padding: 0.5rem 1rem;
-      border-radius: 10px;
-      font-weight: 500;
-      transition: var(--transition);
-    }
-
-    .btn-primary-custom {
-      background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
-      border: none;
+    .fab-mobile {
+      position: fixed;
+      bottom: 22px;
+      right: 22px;
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: var(--accent-primary);
       color: white;
+      border: none;
+      box-shadow: 0 10px 20px rgba(59,130,246,0.35);
+      z-index: 1050;
+      display: none;
+      align-items: center;
+      justify-content: center;
     }
 
-    .btn-primary-custom:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(67, 97, 238, 0.3);
-    }
-
-    /* Mobile Menu Overlay */
     .mobile-overlay {
       position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(0,0,0,0.5);
+      inset: 0;
+      background: rgba(15,23,42,0.38);
       z-index: 1040;
+      backdrop-filter: blur(2px);
       display: none;
     }
 
@@ -587,66 +432,182 @@
       display: block;
     }
 
-    /* Toast Notification */
     .toast-notification {
       position: fixed;
       bottom: 20px;
-      right: 20px;
+      left: 50%;
+      transform: translateX(-50%);
       z-index: 1100;
-      animation: slideIn 0.3s ease-out;
+      min-width: 260px;
+      max-width: calc(100vw - 2rem);
     }
 
-    @keyframes slideIn {
-      from {
-        transform: translateX(100%);
-        opacity: 0;
-      }
-      to {
-        transform: translateX(0);
-        opacity: 1;
-      }
+    .empty-state {
+      text-align: center;
+      padding: 3rem 1.5rem;
+      background: white;
+      border-radius: var(--card-radius);
+      border: 1px solid var(--border-light);
+      margin: 1.5rem 0;
+      box-shadow: var(--shadow-sm);
     }
-    
-    /* Media thumbnail styles */
-    .media-thumbnail {
-      width: 40px;
-      height: 40px;
-      object-fit: cover;
-      border-radius: 6px;
+
+    .empty-state i {
+      font-size: 4rem;
+      color: #cbd5e1;
+      margin-bottom: 1rem;
+    }
+
+    .empty-state h5 {
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+    }
+
+    .empty-state p {
+      margin-bottom: 0.9rem;
+    }
+
+    .upload-area {
+      border: 2px dashed #cbd5e1;
+      padding: 1rem;
+      text-align: center;
+      border-radius: 0.85rem;
       cursor: pointer;
-      transition: transform 0.2s;
+      transition: all 0.2s ease;
+      background: #fafcff;
+      min-width: 0;
     }
-    
-    .media-thumbnail:hover {
-      transform: scale(1.05);
+
+    .upload-area:hover {
+      border-color: var(--accent-primary);
+      background: var(--accent-soft);
     }
-    
-    .media-list {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-      margin-top: 0.5rem;
+
+    .media-thumb {
+      width: 100%;
+      height: 120px;
+      object-fit: cover;
+      border-radius: 0.5rem;
+      cursor: pointer;
     }
-    
-    .task-media {
-      margin-top: 0.5rem;
-      padding-top: 0.5rem;
-      border-top: 1px solid var(--border-color);
+
+    .file-preview-item {
+      position: relative;
+    }
+
+    .modal-body {
+      word-break: break-word;
+    }
+
+    @media (max-width: 991.98px) {
+      .sidebar {
+        transform: translateX(-100%);
+        box-shadow: 2px 0 20px rgba(0,0,0,0.10);
+      }
+
+      .sidebar.mobile-open {
+        transform: translateX(0);
+      }
+
+      .main-content {
+        margin-left: 0;
+      }
+
+      .fab-mobile {
+        display: inline-flex;
+      }
+    }
+
+    @media (max-width: 767.98px) {
+      .top-bar {
+        padding: 0.75rem 0.9rem;
+      }
+
+      .search-wrapper {
+        width: 100%;
+      }
+
+      .top-bar-left,
+      .top-bar-right {
+        width: 100%;
+      }
+
+      .top-bar-right {
+        justify-content: space-between;
+      }
+
+      .projects-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .project-header {
+        padding: 0.95rem;
+      }
+
+      .project-actions {
+        gap: 8px;
+      }
+
+      .project-action-btn {
+        flex: 1 1 auto;
+        justify-content: center;
+      }
+
+      .task-progress {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .task-progress-input {
+        width: 100%;
+      }
+
+      .gantt-card {
+        padding: 0.9rem;
+      }
+
+      #gantt {
+        min-width: 640px;
+      }
+    }
+
+    @media (max-width: 575.98px) {
+      .stats-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .stat-card {
+        padding: 0.9rem;
+      }
+
+      .project-title {
+        flex-direction: column;
+      }
+
+      .progress-badge {
+        align-self: flex-start;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      * {
+        scroll-behavior: auto !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
     }
   </style>
 </head>
 <body>
 
 <div class="app-container">
-  <!-- Sidebar -->
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-header">
       <div class="logo">
-        <div class="logo-icon">
-          <i class="bi bi-grid-3x3-gap-fill"></i>
-        </div>
+        <div class="logo-icon"><i class="bi bi-kanban"></i></div>
         <div class="logo-text">
-          <h3>ProjectFlow</h3>
+          <h3>FlowTrack</h3>
           <p>Schedule & Monitor</p>
         </div>
       </div>
@@ -654,558 +615,957 @@
 
     <div class="nav-menu">
       <div class="nav-item">
-        <a href="#" class="nav-link-custom active">
-          <i class="bi bi-house-door-fill"></i>
-          <span class="nav-label">Dashboard</span>
+        <a href="#" class="nav-link-custom active" id="dashboardLink">
+          <i class="bi bi-speedometer2"></i><span>Dashboard</span>
         </a>
       </div>
-      {% if session.member_id %}
-      <div class="nav-item">
-        <a href="{{ url_for('logout') }}" class="nav-link-custom">
-          <i class="bi bi-box-arrow-right"></i>
-          <span class="nav-label">Logout</span>
+      <div class="nav-item mt-3">
+        <a href="#" class="nav-link-custom" id="logoutLink">
+          <i class="bi bi-box-arrow-right"></i><span>Logout</span>
         </a>
       </div>
-      {% endif %}
     </div>
   </aside>
 
-  <!-- Mobile Overlay -->
   <div class="mobile-overlay" id="mobileOverlay"></div>
 
-  <!-- Main Content -->
   <main class="main-content">
-    <!-- Top Bar -->
     <div class="top-bar">
-      <div class="d-flex align-items-center gap-3">
-        <button class="toggle-sidebar" id="toggleSidebar">
-          <i class="bi bi-list"></i>
+      <div class="top-bar-left">
+        <button class="btn-icon-round d-lg-none" id="mobileMenuToggle" aria-label="Open menu">
+          <i class="bi bi-list fs-5"></i>
         </button>
-        <button class="toggle-sidebar d-md-none" id="mobileMenuToggle">
-          <i class="bi bi-sliders2"></i>
-        </button>
-        <div class="search-bar">
+
+        <div class="search-wrapper">
           <i class="bi bi-search"></i>
-          <form method="GET" action="/" style="width: 100%;">
-            <input type="search" name="q" placeholder="Search projects, tasks..." value="{{ request.args.get('q', '') }}">
-          </form>
+          <input type="search" id="globalSearch" placeholder="Search projects, tasks..." value="">
         </div>
       </div>
-      <div class="d-flex align-items-center gap-3">
-        <button class="btn btn-primary-custom btn-custom d-none d-sm-block" data-bs-toggle="modal" data-bs-target="#addProjectModal">
+
+      <div class="top-bar-right">
+        <button class="btn btn-sm btn-primary btn-pill d-none d-sm-inline-flex align-items-center gap-2"
+                data-bs-toggle="modal" data-bs-target="#addProjectModal"
+                style="background: var(--accent-primary); border: none;">
           <i class="bi bi-plus-lg"></i> New Project
         </button>
+
         <div class="dropdown">
-          <a class="text-decoration-none" href="#" role="button" data-bs-toggle="dropdown">
-            <div class="rounded-circle bg-gradient" style="width: 40px; height: 40px; background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary)); display: flex; align-items: center; justify-content: center;">
-              <i class="bi bi-person-fill text-white"></i>
-            </div>
-          </a>
-          <ul class="dropdown-menu dropdown-menu-end">
-            {% if session.member_name %}
-            <li><span class="dropdown-item-text"><i class="bi bi-person me-2"></i>{{ session.member_name }}</span></li>
+          <div class="rounded-circle bg-primary bg-opacity-10 d-flex align-items-center justify-content-center"
+               style="width: 40px; height: 40px; cursor: pointer;"
+               data-bs-toggle="dropdown" aria-expanded="false">
+            <i class="bi bi-person-circle fs-4 text-primary"></i>
+          </div>
+          <ul class="dropdown-menu dropdown-menu-end shadow border-0">
+            <li><span class="dropdown-item-text"><i class="bi bi-person me-2"></i>Project Manager</span></li>
             <li><hr class="dropdown-divider"></li>
-            <li><a class="dropdown-item" href="{{ url_for('logout') }}"><i class="bi bi-box-arrow-right me-2"></i>Logout</a></li>
-            {% else %}
-            <li><a class="dropdown-item" href="#"><i class="bi bi-person me-2"></i>Guest Mode</a></li>
-            {% endif %}
+            <li><a class="dropdown-item" href="#" id="dropdownLogout"><i class="bi bi-box-arrow-right me-2"></i>Sign out</a></li>
           </ul>
         </div>
       </div>
     </div>
 
-    <!-- Content Area -->
-    <div class="p-3 p-md-4">
-      <!-- Statistics Cards -->
-      {% set total_projects = projects|length %}
-      {% set total_tasks = 0 %}
-      {% set total_completion = 0 %}
-      {% set on_track_count = 0 %}
-      
-      {% for project in projects %}
-        {% set total_tasks = total_tasks + project.tasks|length %}
-        {% set total_completion = total_completion + project.completion %}
-        {% if project.completion >= 75 %}
-          {% set on_track_count = on_track_count + 1 %}
-        {% endif %}
-      {% endfor %}
-      
-      {% set avg_completion = (total_completion / total_projects)|round|int if total_projects > 0 else 0 %}
-      
-      <div class="stats-grid">
+    <div class="p-3 p-md-4" id="mainContentArea">
+      <div class="stats-grid" id="statsContainer">
         <div class="stat-card">
-          <div class="d-flex justify-content-between align-items-center">
+          <div class="d-flex justify-content-between align-items-center gap-3">
             <div>
               <p class="text-muted mb-1">Total Projects</p>
-              <h3 class="mb-0">{{ total_projects }}</h3>
+              <h3 class="mb-0" id="statProjects">0</h3>
             </div>
-            <div class="rounded-circle bg-primary bg-opacity-10 p-3">
-              <i class="bi bi-folder2-open text-primary fs-4"></i>
-            </div>
+            <i class="bi bi-folder2-open fs-2 text-primary opacity-50"></i>
           </div>
         </div>
+
         <div class="stat-card">
-          <div class="d-flex justify-content-between align-items-center">
+          <div class="d-flex justify-content-between align-items-center gap-3">
             <div>
-              <p class="text-muted mb-1">Total Tasks</p>
-              <h3 class="mb-0">{{ total_tasks }}</h3>
+              <p class="text-muted mb-1">Avg. Completion</p>
+              <h3 class="mb-0" id="statCompletion">0%</h3>
             </div>
-            <div class="rounded-circle bg-success bg-opacity-10 p-3">
-              <i class="bi bi-check2-square text-success fs-4"></i>
-            </div>
+            <i class="bi bi-graph-up-arrow fs-2 text-success opacity-50"></i>
           </div>
         </div>
+
         <div class="stat-card">
-          <div class="d-flex justify-content-between align-items-center">
+          <div class="d-flex justify-content-between align-items-center gap-3">
             <div>
-              <p class="text-muted mb-1">Avg Completion</p>
-              <h3 class="mb-0">{{ avg_completion }}%</h3>
+              <p class="text-muted mb-1">On Track (≥75%)</p>
+              <h3 class="mb-0" id="statOntrack">0</h3>
             </div>
-            <div class="rounded-circle bg-info bg-opacity-10 p-3">
-              <i class="bi bi-graph-up text-info fs-4"></i>
-            </div>
-          </div>
-        </div>
-        <div class="stat-card">
-          <div class="d-flex justify-content-between align-items-center">
-            <div>
-              <p class="text-muted mb-1">On Track</p>
-              <h3 class="mb-0">{{ on_track_count }}</h3>
-            </div>
-            <div class="rounded-circle bg-warning bg-opacity-10 p-3">
-              <i class="bi bi-trophy text-warning fs-4"></i>
-            </div>
+            <i class="bi bi-bullseye fs-2 text-warning opacity-50"></i>
           </div>
         </div>
       </div>
 
-      <!-- Projects Grid -->
-      <div class="projects-grid">
-        {% for project in projects %}
-        <div class="project-card" id="project-{{ project.id }}">
-          <div class="project-header">
-            <div class="project-title">
-              <div class="flex-grow-1">
-                <h5 class="mb-1">{{ project.name }}</h5>
-                <span class="project-badge">{{ project.project_type if project.project_type is defined else 'Road' }}</span>
-                {% if project.start_date %}
-                <small class="text-muted d-block mt-1">
-                  <i class="bi bi-calendar"></i> {{ project.start_date }} 
-                  {% if project.end_date %}→ {{ project.end_date }}{% endif %}
-                  {% if project.duration_days %} ({{ project.duration_days }} days){% endif %}
-                </small>
-                {% endif %}
-              </div>
-              <div class="progress-circle text-end">
-                <div class="fw-bold fs-5">{{ "%.0f"|format(project.completion) }}%</div>
-                <small class="text-muted">Complete</small>
-              </div>
-            </div>
-            <!-- Project Action Buttons -->
-            <div class="project-actions">
-              <button class="project-action-btn edit-btn" onclick="showEditProjectModal({{ project.id }}, '{{ project.name }}', '{{ project.project_type }}', '{{ project.start_date }}', '{{ project.end_date }}')" title="Edit Project">
-                <i class="bi bi-pencil"></i>
-                <span class="d-none d-md-inline">Edit</span>
-              </button>
-              <button class="project-action-btn" onclick="showInviteModal({{ project.id }}, '{{ project.name }}')" title="Invite Members">
-                <i class="bi bi-envelope"></i>
-                <span class="d-none d-md-inline">Invite</span>
-              </button>
-              <button class="project-action-btn delete-btn" onclick="confirmDeleteProject({{ project.id }}, '{{ project.name }}')" title="Delete Project">
-                <i class="bi bi-trash"></i>
-                <span class="d-none d-md-inline">Delete</span>
-              </button>
-            </div>
-          </div>
+      <div id="projectsContainer" class="projects-grid"></div>
 
-          <div class="tasks-container">
-            {% for task in project.tasks %}
-            <div class="task-item" data-task-id="{{ task.id }}" data-start="{{ task.start_date }}" data-end="{{ task.end_date }}" data-progress="{{ task.progress }}">
-              <div class="d-flex justify-content-between align-items-start">
-                <div class="flex-grow-1">
-                  <strong class="task-name">
-                    {% if task.name == 'Block work' %}
-                      Block and Form Work
-                    {% elif task.name == 'Plastering and finishing' %}
-                      Plastering and Painting
-                    {% else %}
-                      {{ task.name }}
-                    {% endif %}
-                  </strong>
-                  {% if task.media_files and task.media_files|length > 0 %}
-                  <span class="media-indicator" data-bs-toggle="modal" data-bs-target="#mediaModal{{ task.id }}" style="cursor: pointer;">
-                    <i class="bi bi-paperclip"></i>
-                    {{ task.media_files|length }}
-                  </span>
-                  {% endif %}
-                </div>
-                <div class="action-buttons">
-                  <a href="/edit_task/{{ task.id }}" class="btn btn-sm btn-link text-warning p-0 me-2">
-                    <i class="bi bi-pencil"></i>
-                  </a>
-                  <a href="/delete_task/{{ task.id }}" class="btn btn-sm btn-link text-danger p-0" onclick="return confirm('Delete this task?')">
-                    <i class="bi bi-trash"></i>
-                  </a>
-                </div>
-              </div>
-              <div class="task-progress">
-                <form method="POST" action="/update_task/{{ task.id }}" class="d-flex gap-2 w-100">
-                  <div class="flex-grow-1">
-                    <div class="progress" style="height: 6px;">
-                      <div class="progress-bar bg-success" style="width: {{ task.progress }}%"></div>
-                    </div>
-                  </div>
-                  <input type="number" name="progress" value="{{ task.progress }}" min="0" max="100" step="1" class="task-progress-input" style="width: 60px;">
-                  <button type="submit" class="btn btn-sm btn-success py-0 px-2">✓</button>
-                </form>
-              </div>
-              
-              <!-- Display media thumbnails for this task -->
-              {% if task.media_files and task.media_files|length > 0 %}
-              <div class="task-media">
-                <div class="media-list">
-                  {% for media in task.media_files[:3] %}
-                    {% if media.file_type == 'image' %}
-                      <img src="/static/uploads/{{ media.filename }}" class="media-thumbnail" alt="media" data-bs-toggle="modal" data-bs-target="#mediaViewerModal" onclick="showMediaPreview('/static/uploads/{{ media.filename }}', 'image')">
-                    {% else %}
-                      <video class="media-thumbnail" style="object-fit: cover;" data-bs-toggle="modal" data-bs-target="#mediaViewerModal" onclick="showMediaPreview('/static/uploads/{{ media.filename }}', 'video')">
-                        <source src="/static/uploads/{{ media.filename }}">
-                      </video>
-                    {% endif %}
-                  {% endfor %}
-                  {% if task.media_files|length > 3 %}
-                    <span class="badge bg-secondary" style="cursor: pointer;" data-bs-toggle="modal" data-bs-target="#mediaModal{{ task.id }}">+{{ task.media_files|length - 3 }} more</span>
-                  {% endif %}
-                </div>
-              </div>
-              {% endif %}
-            </div>
-            
-            <!-- Media Modal for this task -->
-            {% if task.media_files and task.media_files|length > 0 %}
-            <div class="modal fade" id="mediaModal{{ task.id }}" tabindex="-1">
-              <div class="modal-dialog modal-lg modal-dialog-centered">
-                <div class="modal-content">
-                  <div class="modal-header">
-                    <h5 class="modal-title">Media Files - {{ task.name }}</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                  </div>
-                  <div class="modal-body">
-                    <div class="row g-3">
-                      {% for media in task.media_files %}
-                      <div class="col-md-4">
-                        <div class="card h-100">
-                          {% if media.file_type == 'image' %}
-                            <img src="/static/uploads/{{ media.filename }}" class="card-img-top" alt="{{ media.filename }}" style="height: 150px; object-fit: cover; cursor: pointer;" onclick="showMediaPreview('/static/uploads/{{ media.filename }}', 'image')">
-                          {% else %}
-                            <video class="card-img-top" style="height: 150px; object-fit: cover; cursor: pointer;" onclick="showMediaPreview('/static/uploads/{{ media.filename }}', 'video')">
-                              <source src="/static/uploads/{{ media.filename }}">
-                            </video>
-                          {% endif %}
-                          <div class="card-body p-2">
-                            <small class="text-muted d-block text-truncate">{{ media.filename }}</small>
-                            <small class="text-muted">{{ media.file_type }}</small>
-                          </div>
-                        </div>
-                      </div>
-                      {% endfor %}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            {% endif %}
-            {% endfor %}
-          </div>
-
-          <div class="card-footer">
-            <div>
-              <small class="text-muted">{{ project.tasks|length }} tasks</small>
-            </div>
-            <div class="d-flex gap-2">
-              <a href="/project_report/{{ project.id }}" class="btn btn-sm btn-outline-info">
-                <i class="bi bi-file-text"></i> Report
-              </a>
-              <a href="/delete_all_tasks/{{ project.id }}" class="btn btn-sm btn-outline-danger" onclick="return confirm('Delete all tasks?')">
-                <i class="bi bi-trash"></i>
-              </a>
-            </div>
-          </div>
-        </div>
-        {% endfor %}
-      </div>
-
-      <!-- Media Viewer Modal -->
-      <div class="modal fade" id="mediaViewerModal" tabindex="-1">
-        <div class="modal-dialog modal-xl modal-dialog-centered">
-          <div class="modal-content bg-dark">
-            <div class="modal-header border-0">
-              <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body text-center">
-              <div id="mediaViewerContent"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Frappe Gantt Chart Section (Integrated) -->
       <div class="gantt-card">
-        <div class="card shadow-sm border-0 rounded-4 overflow-hidden">
-          <div class="card-header bg-white border-0 py-3 px-4">
-            <h5 class="fw-bold mb-0">
-              <i class="bi bi-bar-chart-steps text-primary me-2"></i> Project Gantt Timeline (Interactive)
-            </h5>
-            <p class="text-muted small mb-0 mt-1">Drag bars to update dates — changes persist to backend</p>
-          </div>
-          <div class="card-body p-4 pt-0">
-            <div class="gantt-container">
-              <div id="gantt"></div>
-            </div>
-          </div>
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+          <h5 class="fw-bold m-0">
+            <i class="bi bi-bar-chart-steps text-primary me-2"></i>Interactive Gantt Timeline
+          </h5>
+          <small class="text-muted">Drag bars to adjust dates</small>
         </div>
+        <div id="gantt"></div>
       </div>
-
-      {% if not projects %}
-      <div class="text-center py-5">
-        <i class="bi bi-inbox fs-1 text-muted"></i>
-        <p class="text-muted mt-3">No projects yet. Create your first project!</p>
-        <button class="btn btn-primary-custom btn-custom" data-bs-toggle="modal" data-bs-target="#addProjectModal">
-          <i class="bi bi-plus-lg"></i> Create Project
-        </button>
-      </div>
-      {% endif %}
     </div>
   </main>
 </div>
 
-<!-- Modals (Add, Edit, Invite, Delete) -->
-<div class="modal fade" id="addProjectModal" tabindex="-1">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content border-0 shadow-lg">
-      <div class="modal-header border-0 pb-0">
-        <h5 class="modal-title fw-bold">Create New Project</h5>
+<!-- MODALS -->
+<div class="modal fade" id="addProjectModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header bg-light">
+        <h5 class="modal-title fw-bold">Create Project</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
-      <form method="POST" action="/add_project">
+      <form id="addProjectForm">
         <div class="modal-body">
           <div class="mb-3">
-            <label class="form-label fw-semibold">Project Name</label>
-            <input type="text" name="name" class="form-control" placeholder="e.g., Highway Extension Project" required>
+            <label class="form-label">Project name</label>
+            <input type="text" id="projName" class="form-control" required>
           </div>
           <div class="mb-3">
-            <label class="form-label fw-semibold">Project Type</label>
-            <select name="type" class="form-select" required>
-              <option value="Road">Road Construction</option>
-              <option value="Building">Building Development</option>
+            <label class="form-label">Type</label>
+            <select id="projType" class="form-select">
+              <option>Road Construction</option>
+              <option>Building Development</option>
             </select>
           </div>
-          <div class="mb-3">
-            <label class="form-label fw-semibold">Start Date</label>
-            <input type="date" name="start_date" class="form-control">
-          </div>
-          <div class="mb-3">
-            <label class="form-label fw-semibold">End Date</label>
-            <input type="date" name="end_date" class="form-control">
+          <div class="row g-2">
+            <div class="col-12 col-sm-6">
+              <label class="form-label">Start date</label>
+              <input type="date" id="projStart" class="form-control">
+            </div>
+            <div class="col-12 col-sm-6">
+              <label class="form-label">End date</label>
+              <input type="date" id="projEnd" class="form-control">
+            </div>
           </div>
         </div>
-        <div class="modal-footer border-0 pt-0">
+        <div class="modal-footer">
           <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
-          <button type="submit" class="btn btn-primary-custom">Create Project</button>
+          <button type="submit" class="btn btn-primary" style="background: var(--accent-primary); border: none;">Create Project</button>
         </div>
       </form>
     </div>
   </div>
 </div>
 
-<div class="modal fade" id="editProjectModal" tabindex="-1">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content border-0 shadow-lg">
-      <div class="modal-header border-0 pb-0">
-        <h5 class="modal-title fw-bold">Edit Project</h5>
+<div class="modal fade" id="editProjectModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header bg-light">
+        <h5 class="modal-title">Edit Project</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
-      <form id="editProjectForm" method="POST" action="/edit_project/0">
+      <form id="editProjectForm">
         <div class="modal-body">
-          <div class="mb-3"><label class="form-label fw-semibold">Project Name</label><input type="text" name="name" id="editProjectName" class="form-control" required></div>
-          <div class="mb-3"><label class="form-label fw-semibold">Project Type</label><select name="type" id="editProjectType" class="form-select"><option value="Road">Road Construction</option><option value="Building">Building Development</option></select></div>
-          <div class="mb-3"><label class="form-label fw-semibold">Start Date</label><input type="date" name="start_date" id="editStartDate" class="form-control"></div>
-          <div class="mb-3"><label class="form-label fw-semibold">End Date</label><input type="date" name="end_date" id="editEndDate" class="form-control"></div>
+          <input type="hidden" id="editProjectId">
+          <div class="mb-2">
+            <label class="form-label">Name</label>
+            <input type="text" id="editName" class="form-control">
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Type</label>
+            <select id="editType" class="form-select">
+              <option>Road Construction</option>
+              <option>Building Development</option>
+            </select>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Start Date</label>
+            <input type="date" id="editStart" class="form-control">
+          </div>
+          <div class="mb-2">
+            <label class="form-label">End Date</label>
+            <input type="date" id="editEnd" class="form-control">
+          </div>
         </div>
-        <div class="modal-footer border-0 pt-0"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-primary-custom">Save Changes</button></div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary" style="background: var(--accent-primary); border: none;">Save Changes</button>
+        </div>
       </form>
     </div>
   </div>
 </div>
 
-<div class="modal fade" id="inviteModal" tabindex="-1">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content border-0 shadow-lg">
-      <div class="modal-header border-0 pb-0"><h5 class="modal-title fw-bold">Invite Team Members</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-      <form id="inviteForm" method="POST"><div class="modal-body"><p class="text-muted">Invite team members to <strong id="inviteProjectName"></strong></p><div class="mb-3"><label class="form-label fw-semibold">Email Addresses</label><textarea name="emails" class="form-control" rows="4" placeholder="Enter email addresses separated by commas" required></textarea><small class="text-muted">Each member will receive an email invitation.</small></div></div><div class="modal-footer border-0 pt-0"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-primary-custom"><i class="bi bi-envelope"></i> Send Invitations</button></div></form>
+<!-- EDIT TASK MODAL WITH IMAGE/VIDEO UPLOAD -->
+<div class="modal fade" id="editTaskModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header bg-light">
+        <h5 class="modal-title fw-bold">
+          <i class="bi bi-pencil-square text-primary me-2"></i>Edit Task
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form id="editTaskForm" enctype="multipart/form-data">
+        <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+          <input type="hidden" id="editTaskId">
+          <input type="hidden" id="editTaskProjectId">
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Task Name</label>
+            <input type="text" id="editTaskName" class="form-control" required>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Progress (%)</label>
+            <input type="range" id="editTaskProgressSlider" class="form-range" min="0" max="100" step="1">
+            <input type="number" id="editTaskProgress" class="form-control mt-2" min="0" max="100" step="1">
+          </div>
+
+          <div class="row g-2 mb-3">
+            <div class="col-12 col-sm-6">
+              <label class="form-label fw-semibold">Start Date</label>
+              <input type="date" id="editTaskStartDate" class="form-control">
+            </div>
+            <div class="col-12 col-sm-6">
+              <label class="form-label fw-semibold">End Date</label>
+              <input type="date" id="editTaskEndDate" class="form-control">
+            </div>
+          </div>
+
+          <hr>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">
+              <i class="bi bi-image text-primary me-1"></i> Upload Images
+            </label>
+            <div class="upload-area" id="modalImageUploadArea" onclick="document.getElementById('modalImageInput').click()">
+              <i class="bi bi-cloud-upload fs-2 text-muted"></i>
+              <p class="mb-0 mt-1 small">Click or drag to upload images</p>
+              <small class="text-muted">JPG, PNG, GIF (max 5MB each)</small>
+            </div>
+            <input type="file" name="images" id="modalImageInput" class="d-none" multiple accept="image/jpeg,image/jpg,image/png,image/gif,image/webp">
+            <div id="modalImagePreview" class="mt-2 d-flex flex-wrap gap-2"></div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">
+              <i class="bi bi-camera-reels text-primary me-1"></i> Upload Videos
+            </label>
+            <div class="upload-area" id="modalVideoUploadArea" onclick="document.getElementById('modalVideoInput').click()">
+              <i class="bi bi-cloud-upload fs-2 text-muted"></i>
+              <p class="mb-0 mt-1 small">Click or drag to upload videos</p>
+              <small class="text-muted">MP4, MOV, AVI (max 50MB each)</small>
+            </div>
+            <input type="file" name="videos" id="modalVideoInput" class="d-none" multiple accept="video/mp4,video/quicktime,video/x-msvideo,video/x-matroska,video/webm">
+            <div id="modalVideoPreview" class="mt-2 d-flex flex-wrap gap-2"></div>
+          </div>
+
+          <hr>
+
+          <label class="form-label fw-semibold">
+            <i class="bi bi-images text-primary me-1"></i> Current Media Files
+          </label>
+          <div id="currentMediaList" class="row g-2 mt-1" style="max-height: 200px; overflow-y: auto;">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary" style="background: var(--accent-primary); border: none;">Save Changes</button>
+        </div>
+      </form>
     </div>
   </div>
 </div>
 
-<div class="modal fade" id="deleteProjectModal" tabindex="-1">
-  <div class="modal-dialog modal-dialog-centered"><div class="modal-content border-0 shadow-lg"><div class="modal-header border-0 pb-0"><h5 class="modal-title fw-bold text-danger">Delete Project</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body text-center py-3"><i class="bi bi-exclamation-triangle-fill text-danger fs-1 mb-3"></i><h6 class="mb-3">Are you sure you want to delete this project?</h6><p class="text-muted" id="deleteProjectMessage"></p><p class="small text-danger">This action cannot be undone.</p></div><div class="modal-footer border-0 pt-0"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button><a href="#" id="confirmDeleteBtn" class="btn btn-danger">Delete Project</a></div></div></div>
+<div class="modal fade" id="inviteModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header bg-light">
+        <h5 class="modal-title">Invite Members</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p>Invite to <strong id="inviteProjName"></strong></p>
+        <textarea class="form-control" rows="3" placeholder="Emails (comma separated)"></textarea>
+        <small class="text-muted mt-2 d-block">Invitation emails would be sent in production</small>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" data-bs-dismiss="modal" style="background: var(--accent-primary); border: none;">Send Invites</button>
+      </div>
+    </div>
+  </div>
 </div>
 
-<button class="btn btn-primary-custom rounded-circle position-fixed bottom-0 end-0 m-3 d-md-none" style="width: 56px; height: 56px; z-index: 1000;" data-bs-toggle="modal" data-bs-target="#addProjectModal"><i class="bi bi-plus-lg fs-4"></i></button>
+<div class="modal fade" id="mediaViewerModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content bg-dark text-white">
+      <div class="modal-header border-0">
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body text-center" id="mediaViewerContent"></div>
+    </div>
+  </div>
+</div>
 
-<!-- Required Scripts: jQuery, Frappe Gantt, Bootstrap -->
+<button class="fab-mobile" id="mobileFab" data-bs-toggle="modal" data-bs-target="#addProjectModal" aria-label="Add project">
+  <i class="bi bi-plus-lg fs-4"></i>
+</button>
+
+<!-- SCRIPTS -->
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/frappe-gantt/0.5.0/frappe-gantt.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
-  // Media preview function
-  function showMediaPreview(src, type) {
-    const container = document.getElementById('mediaViewerContent');
-    if (type === 'image') {
-      container.innerHTML = `<img src="${src}" class="img-fluid" style="max-height: 80vh;">`;
-    } else {
-      container.innerHTML = `<video controls autoplay class="w-100" style="max-height: 80vh;"><source src="${src}"></video>`;
-    }
+  // ========== ACTIVE PROJECT MANAGEMENT SYSTEM ==========
+  let projectsData = [];
+
+  function saveToLocalStorage() {
+    localStorage.setItem('flowtrack_projects_active', JSON.stringify(projectsData));
   }
-  
-  // Collect tasks from the DOM (projects + tasks) for Frappe Gantt
-  function buildGanttTasksFromDOM() {
-    let tasksList = [];
-    document.querySelectorAll('.task-item').forEach(taskEl => {
-      const taskId = taskEl.dataset.taskId;
-      const taskNameEl = taskEl.querySelector('.task-name');
-      let rawName = taskNameEl ? taskNameEl.innerText.trim() : 'Unnamed';
-      const start = taskEl.dataset.start;
-      const end = taskEl.dataset.end;
-      let progressVal = parseFloat(taskEl.dataset.progress) || 0;
-      if (start && end) {
-        tasksList.push({
-          id: taskId,
-          name: rawName,
-          start: start,
-          end: end,
-          progress: progressVal / 100
-        });
+
+  function loadFromLocalStorage() {
+    const saved = localStorage.getItem('flowtrack_projects_active');
+    if (saved) {
+      try {
+        projectsData = JSON.parse(saved);
+      } catch(e) {
+        console.warn(e);
+        projectsData = [];
       }
-    });
-    return tasksList;
+    } else {
+      projectsData = [];
+    }
   }
 
-  let ganttChartInstance = null;
+  function updateStats() {
+    let total = projectsData.length;
+    let avgComp = total ? Math.round(projectsData.reduce((acc, p) => acc + (p.completion || 0), 0) / total) : 0;
+    let onTrack = projectsData.filter(p => (p.completion || 0) >= 75).length;
+    const statProjects = document.getElementById('statProjects');
+    const statCompletion = document.getElementById('statCompletion');
+    const statOntrack = document.getElementById('statOntrack');
+    if (statProjects) statProjects.innerText = total;
+    if (statCompletion) statCompletion.innerText = avgComp + "%";
+    if (statOntrack) statOntrack.innerText = onTrack;
+  }
 
-  function renderFrappeGantt() {
-    const tasks = buildGanttTasksFromDOM();
-    const container = document.getElementById("gantt");
-    if (!container) return;
-    if (ganttChartInstance) {
-      container.innerHTML = '';
+  function recalcProjectCompletion(project) {
+    if (!project.tasks || project.tasks.length === 0) {
+      project.completion = 0;
+    } else {
+      const totalProgress = project.tasks.reduce((sum, t) => sum + (t.progress || 0), 0);
+      project.completion = Math.round(totalProgress / project.tasks.length);
     }
-    if (tasks.length === 0) {
-      container.innerHTML = '<div class="alert alert-light text-center p-4"><i class="bi bi-calendar-x"></i> No tasks with valid start/end dates. Add dates to tasks to view Gantt.</div>';
+  }
+
+  function escapeHtml(str) {
+    if (!str) return '';
+    return String(str).replace(/[&<>]/g, function(m) {
+      if (m === '&') return '&amp;';
+      if (m === '<') return '&lt;';
+      if (m === '>') return '&gt;';
+      return m;
+    });
+  }
+
+  // Open Edit Task Modal with image/video upload capability
+  function openEditTaskModal(projectId, taskId) {
+    const project = projectsData.find(p => p.id === projectId);
+    if (!project) return;
+    const task = project.tasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    document.getElementById('editTaskId').value = taskId;
+    document.getElementById('editTaskProjectId').value = projectId;
+    document.getElementById('editTaskName').value = task.name;
+    document.getElementById('editTaskProgress').value = task.progress || 0;
+    document.getElementById('editTaskProgressSlider').value = task.progress || 0;
+    document.getElementById('editTaskStartDate').value = task.start_date || '';
+    document.getElementById('editTaskEndDate').value = task.end_date || '';
+
+    document.getElementById('modalImagePreview').innerHTML = '';
+    document.getElementById('modalVideoPreview').innerHTML = '';
+    document.getElementById('modalImageInput').value = '';
+    document.getElementById('modalVideoInput').value = '';
+
+    const mediaListContainer = document.getElementById('currentMediaList');
+    if (task.media && task.media.length > 0) {
+      let mediaHtml = '';
+      task.media.forEach((media) => {
+        mediaHtml += `
+          <div class="col-4 col-sm-3">
+            <div class="border rounded p-1 text-center h-100">
+              ${media.type === 'image'
+                ? `<img src="${media.url}" class="img-fluid rounded" style="height: 60px; object-fit: cover;">`
+                : `<video class="img-fluid rounded" style="height: 60px; object-fit: cover;"><source src="${media.url}"></video>`
+              }
+              <small class="text-muted d-block text-truncate" style="font-size: 10px;">${escapeHtml(media.name)}</small>
+            </div>
+          </div>`;
+      });
+      mediaListContainer.innerHTML = mediaHtml;
+    } else {
+      mediaListContainer.innerHTML = '<div class="col-12"><p class="text-muted small text-center mb-0">No media files attached</p></div>';
+    }
+
+    const modal = new bootstrap.Modal(document.getElementById('editTaskModal'));
+    modal.show();
+  }
+
+  // Save task edits including media files
+  function saveTaskEdit(event) {
+    event.preventDefault();
+
+    const taskId = parseInt(document.getElementById('editTaskId').value);
+    const projectId = parseInt(document.getElementById('editTaskProjectId').value);
+    const newName = document.getElementById('editTaskName').value.trim();
+    const newProgress = parseInt(document.getElementById('editTaskProgress').value);
+    const newStartDate = document.getElementById('editTaskStartDate').value;
+    const newEndDate = document.getElementById('editTaskEndDate').value;
+
+    const imageFiles = document.getElementById('modalImageInput').files;
+    const videoFiles = document.getElementById('modalVideoInput').files;
+
+    if (!newName) {
+      showToast("Task name is required", "danger");
       return;
     }
-    try {
-      ganttChartInstance = new Gantt("#gantt", tasks, {
-        on_date_change: function(task, start, end) {
-          $.ajax({
-            url: '/update_task_gantt/' + task.id,
-            method: 'POST',
-            contentType: "application/json",
-            data: JSON.stringify({
-              start_date: start.toISOString().slice(0,10),
-              end_date: end.toISOString().slice(0,10)
-            }),
-            success: function(res) {
-              showToast(res.message || "Dates updated", "success");
-              const taskElement = document.querySelector(`.task-item[data-task-id='${task.id}']`);
-              if(taskElement) {
-                taskElement.dataset.start = start.toISOString().slice(0,10);
-                taskElement.dataset.end = end.toISOString().slice(0,10);
-              }
-            },
-            error: function(err) { showToast("Error updating task dates", "danger"); }
+
+    const project = projectsData.find(p => p.id === projectId);
+    if (project) {
+      const task = project.tasks.find(t => t.id === taskId);
+      if (task) {
+        task.name = newName;
+        task.progress = Math.min(100, Math.max(0, newProgress));
+        task.start_date = newStartDate;
+        task.end_date = newEndDate;
+
+        if (imageFiles.length > 0) {
+          if (!task.media) task.media = [];
+          Array.from(imageFiles).forEach(file => {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+              task.media.push({
+                id: Date.now() + Math.random(),
+                name: file.name,
+                type: 'image',
+                url: e.target.result
+              });
+              saveToLocalStorage();
+              renderProjects(document.getElementById('globalSearch')?.value || '');
+            };
+            reader.readAsDataURL(file);
           });
-        },
-        on_progress_change: function(task, progress) {
-          let progressPercent = Math.round(progress * 100);
-          $.ajax({
-            url: '/update_task_gantt/' + task.id,
-            method: 'POST',
-            contentType: "application/json",
-            data: JSON.stringify({progress: progressPercent}),
-            success: function(res) {
-              showToast(res.message || "Progress updated", "success");
-              const taskEl = document.querySelector(`.task-item[data-task-id='${task.id}']`);
-              if(taskEl) {
-                taskEl.dataset.progress = progressPercent;
-                const progressInput = taskEl.querySelector('.task-progress-input');
-                if(progressInput) progressInput.value = progressPercent;
-                const progressBar = taskEl.querySelector('.progress-bar');
-                if(progressBar) progressBar.style.width = progressPercent + '%';
-              }
-            },
-            error: function(err) { showToast("Error updating progress", "danger"); }
+        }
+
+        if (videoFiles.length > 0) {
+          if (!task.media) task.media = [];
+          Array.from(videoFiles).forEach(file => {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+              task.media.push({
+                id: Date.now() + Math.random(),
+                name: file.name,
+                type: 'video',
+                url: e.target.result
+              });
+              saveToLocalStorage();
+              renderProjects(document.getElementById('globalSearch')?.value || '');
+            };
+            reader.readAsDataURL(file);
           });
-        },
-        on_view_change: function(mode) { console.log("View changed to", mode); }
-      });
-    } catch(e) { console.error(e); container.innerHTML = '<div class="alert alert-danger">Error loading Gantt chart</div>'; }
-  }
+        }
 
-  function showToast(message, type = 'success') {
-    const toastHtml = `<div class="toast-notification"><div class="toast align-items-center text-white bg-${type} border-0" role="alert" data-bs-autohide="true" data-bs-delay="3000"><div class="d-flex"><div class="toast-body"><i class="bi bi-${type === 'success' ? 'check-circle-fill' : 'exclamation-triangle-fill'} me-2"></i>${message}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div></div></div>`;
-    const containerDiv = document.createElement('div'); containerDiv.innerHTML = toastHtml; document.body.appendChild(containerDiv);
-    const toastEl = containerDiv.querySelector('.toast'); const toast = new bootstrap.Toast(toastEl, { autohide: true, delay: 3000 }); toast.show();
-    toastEl.addEventListener('hidden.bs.toast', () => containerDiv.remove());
-  }
+        recalcProjectCompletion(project);
+        saveToLocalStorage();
+        renderProjects(document.getElementById('globalSearch')?.value || '');
 
-  // Sidebar & modals logic
-  const sidebar = document.getElementById('sidebar'), toggleBtn = document.getElementById('toggleSidebar'), mobileMenuToggle = document.getElementById('mobileMenuToggle'), mobileOverlay = document.getElementById('mobileOverlay');
-  let isCollapsed = false;
-  toggleBtn.addEventListener('click', () => { if(window.innerWidth > 768) { isCollapsed = !isCollapsed; sidebar.classList.toggle('collapsed', isCollapsed); } });
-  mobileMenuToggle?.addEventListener('click', () => { sidebar.classList.toggle('mobile-open'); mobileOverlay.classList.toggle('active'); });
-  mobileOverlay?.addEventListener('click', () => { sidebar.classList.remove('mobile-open'); mobileOverlay.classList.remove('active'); });
-  window.addEventListener('resize', () => { if(window.innerWidth > 768) { sidebar.classList.remove('mobile-open'); mobileOverlay.classList.remove('active'); } else sidebar.classList.remove('collapsed'); });
-
-  function showEditProjectModal(id, name, type, start, end) { 
-    const form = document.getElementById('editProjectForm'); 
-    form.action = `/edit_project/${id}`; 
-    document.getElementById('editProjectName').value = name; 
-    document.getElementById('editProjectType').value = type; 
-    document.getElementById('editStartDate').value = start || ''; 
-    document.getElementById('editEndDate').value = end || ''; 
-    new bootstrap.Modal(document.getElementById('editProjectModal')).show(); 
-  }
-  
-  function showInviteModal(id, name) { 
-    document.getElementById('inviteForm').action = `/invite_members/${id}`; 
-    document.getElementById('inviteProjectName').innerText = name; 
-    new bootstrap.Modal(document.getElementById('inviteModal')).show(); 
-  }
-  
-  function confirmDeleteProject(id, name) { 
-    document.getElementById('deleteProjectMessage').innerHTML = `Project: <strong>${name}</strong>`; 
-    document.getElementById('confirmDeleteBtn').href = `/delete_project/${id}`; 
-    new bootstrap.Modal(document.getElementById('deleteProjectModal')).show(); 
-  }
-
-  // Initial render after DOM ready
-  document.addEventListener('DOMContentLoaded', function() {
-    renderFrappeGantt();
-    const observer = new MutationObserver(function(mutations) { renderFrappeGantt(); });
-    const projectsGrid = document.querySelector('.projects-grid');
-    if (projectsGrid) {
-      observer.observe(projectsGrid, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-start','data-end'] });
+        setTimeout(() => {
+          bootstrap.Modal.getInstance(document.getElementById('editTaskModal')).hide();
+          showToast(`Task "${newName}" updated successfully`, "success");
+        }, 450);
+      }
     }
-    // Refresh gantt when any task update forms submit (optional but ensures sync)
-    document.querySelectorAll('form[action*="/update_task"]').forEach(form => { form.addEventListener('submit', () => setTimeout(renderFrappeGantt, 300)); });
+  }
+
+  function syncTaskProgress(value) {
+    const slider = document.getElementById('editTaskProgressSlider');
+    const numberInput = document.getElementById('editTaskProgress');
+    if (slider && numberInput) {
+      slider.value = value;
+      numberInput.value = value;
+    }
+  }
+
+  function renderProjects(filterText = "") {
+    const container = document.getElementById('projectsContainer');
+    if (!container) return;
+
+    let filtered = projectsData.filter(p =>
+      p.name.toLowerCase().includes(filterText.toLowerCase()) ||
+      (p.tasks || []).some(t => t.name.toLowerCase().includes(filterText.toLowerCase()))
+    );
+
+    if (filtered.length === 0) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <i class="bi bi-folder-plus"></i>
+          <h5>No projects yet</h5>
+          <p class="text-muted">Get started by creating your first project</p>
+          <button class="btn btn-primary mt-2 create-project-empty-btn" style="background: var(--accent-primary); border: none;">
+            <i class="bi bi-plus-lg"></i> Create Project
+          </button>
+        </div>`;
+      const emptyBtn = container.querySelector('.create-project-empty-btn');
+      if (emptyBtn) {
+        emptyBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          const modalEl = document.getElementById('addProjectModal');
+          if (modalEl) new bootstrap.Modal(modalEl).show();
+        });
+      }
+      updateStats();
+      renderGanttChart();
+      return;
+    }
+
+    let html = '';
+    filtered.forEach(proj => {
+      let tasksHtml = '';
+      const tasksList = proj.tasks || [];
+
+      tasksList.forEach(task => {
+        const hasMedia = task.media && task.media.length > 0;
+        const mediaBadge = hasMedia
+          ? `<span class="badge bg-info ms-2" style="font-size: 10px;"><i class="bi bi-paperclip"></i> ${task.media.length}</span>`
+          : '';
+
+        tasksHtml += `
+          <div class="task-item" data-task-id="${task.id}" data-start="${task.start_date || ''}" data-end="${task.end_date || ''}" data-progress="${task.progress || 0}">
+            <div class="d-flex justify-content-between align-items-start gap-2">
+              <div class="flex-grow-1">
+                <strong class="task-name">${escapeHtml(task.name)}</strong>
+                ${mediaBadge}
+              </div>
+              <div class="d-flex gap-2 flex-wrap justify-content-end">
+                <button class="btn btn-sm btn-outline-warning edit-task-btn"
+                        onclick="openEditTaskModal(${proj.id}, ${task.id})"
+                        title="Edit task with media upload">
+                  <i class="bi bi-pencil-square"></i> Edit
+                </button>
+                <button class="btn btn-sm btn-outline-danger delete-task-btn"
+                        data-taskid="${task.id}"
+                        data-projid="${proj.id}"
+                        title="Delete task">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </div>
+            </div>
+
+            <div class="task-progress mt-2">
+              <div class="flex-grow-1">
+                <div class="progress" style="height:6px">
+                  <div class="progress-bar bg-success" style="width:${task.progress || 0}%"></div>
+                </div>
+              </div>
+              <input type="number" class="task-progress-input" value="${task.progress || 0}" min="0" max="100" step="1" data-taskid="${task.id}">
+              <button class="btn btn-sm btn-success update-progress-btn" data-id="${task.id}">✓ Update</button>
+            </div>
+
+            <div class="task-meta mt-2">
+              <small class="text-muted">
+                <i class="bi bi-calendar-range"></i>
+                ${task.start_date || 'No start date'} → ${task.end_date || 'No end date'}
+              </small>
+            </div>
+
+            ${hasMedia ? `<div class="mt-2"><small class="text-primary"><i class="bi bi-images"></i> ${task.media.length} media file(s) attached</small></div>` : ''}
+          </div>`;
+      });
+
+      html += `
+        <div class="project-card" data-project-id="${proj.id}">
+          <div class="project-header">
+            <div class="project-title">
+              <div>
+                <h5 class="mb-1">${escapeHtml(proj.name)}</h5>
+                <span class="badge bg-light text-dark">${escapeHtml(proj.type || 'General')}</span>
+                <div>
+                  <small class="text-muted">
+                    <i class="bi bi-calendar"></i> ${proj.start_date || '—'} → ${proj.end_date || '—'}
+                  </small>
+                </div>
+              </div>
+              <div class="progress-badge">${proj.completion || 0}%</div>
+            </div>
+
+            <div class="project-actions">
+              <button class="project-action-btn edit-project-btn" data-id="${proj.id}">
+                <i class="bi bi-pencil"></i> Edit
+              </button>
+              <button class="project-action-btn invite-project-btn" data-id="${proj.id}" data-name="${escapeHtml(proj.name)}">
+                <i class="bi bi-envelope"></i> Invite
+              </button>
+              <button class="project-action-btn delete-project-btn text-danger" data-id="${proj.id}">
+                <i class="bi bi-trash"></i> Delete
+              </button>
+            </div>
+          </div>
+
+          <div class="p-3">
+            ${tasksHtml || '<p class="text-muted small text-center py-3 mb-0">No tasks yet. Click "Add Task" to get started.</p>'}
+          </div>
+
+          <div class="card-footer bg-transparent border-0 pb-3 pt-0 px-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <small><i class="bi bi-check2-square"></i> ${tasksList.length} tasks</small>
+            <button class="btn btn-sm btn-outline-secondary add-task-btn" data-projid="${proj.id}">
+              <i class="bi bi-plus-circle"></i> Add Task
+            </button>
+          </div>
+        </div>`;
+    });
+
+    container.innerHTML = html;
+
+    attachProjectEventListeners();
+    attachProgressEvents();
+    updateStats();
+    renderGanttChart();
+  }
+
+  function attachProjectEventListeners() {
+    document.querySelectorAll('.edit-project-btn').forEach(btn => {
+      const handler = () => {
+        const id = parseInt(btn.dataset.id);
+        const proj = projectsData.find(p => p.id === id);
+        if (proj) {
+          document.getElementById('editProjectId').value = id;
+          document.getElementById('editName').value = proj.name;
+          document.getElementById('editType').value = proj.type || 'Road Construction';
+          document.getElementById('editStart').value = proj.start_date || '';
+          document.getElementById('editEnd').value = proj.end_date || '';
+          new bootstrap.Modal(document.getElementById('editProjectModal')).show();
+        }
+      };
+      btn.onclick = handler;
+    });
+
+    document.querySelectorAll('.delete-project-btn').forEach(btn => {
+      const handler = () => {
+        const id = parseInt(btn.dataset.id);
+        if (confirm("⚠️ Delete this project permanently? All tasks will be removed.")) {
+          projectsData = projectsData.filter(p => p.id !== id);
+          saveToLocalStorage();
+          renderProjects(document.getElementById('globalSearch')?.value || '');
+          showToast("Project deleted", "danger");
+        }
+      };
+      btn.onclick = handler;
+    });
+
+    document.querySelectorAll('.invite-project-btn').forEach(btn => {
+      const handler = () => {
+        const name = btn.dataset.name;
+        const inviteName = document.getElementById('inviteProjName');
+        if (inviteName) inviteName.innerText = name;
+        new bootstrap.Modal(document.getElementById('inviteModal')).show();
+      };
+      btn.onclick = handler;
+    });
+
+    document.querySelectorAll('.add-task-btn').forEach(btn => {
+      const handler = () => {
+        const projId = parseInt(btn.dataset.projid);
+        const proj = projectsData.find(p => p.id === projId);
+        if (proj) {
+          if (!proj.tasks) proj.tasks = [];
+          const newId = Date.now();
+          const today = new Date();
+          const nextWeek = new Date(today);
+          nextWeek.setDate(today.getDate() + 14);
+          proj.tasks.push({
+            id: newId,
+            name: "New Task",
+            start_date: today.toISOString().slice(0,10),
+            end_date: nextWeek.toISOString().slice(0,10),
+            progress: 0,
+            media: []
+          });
+          recalcProjectCompletion(proj);
+          saveToLocalStorage();
+          renderProjects(document.getElementById('globalSearch')?.value || '');
+          showToast("Task added successfully. Click Edit to add media.", "success");
+        }
+      };
+      btn.onclick = handler;
+    });
+
+    document.querySelectorAll('.delete-task-btn').forEach(btn => {
+      const handler = () => {
+        const taskId = parseInt(btn.dataset.taskid);
+        const projId = parseInt(btn.dataset.projid);
+        const proj = projectsData.find(p => p.id === projId);
+        if (proj && proj.tasks) {
+          const taskIndex = proj.tasks.findIndex(t => t.id === taskId);
+          if (taskIndex !== -1) {
+            const taskName = proj.tasks[taskIndex].name;
+            if (confirm(`Delete task "${taskName}"? This action cannot be undone.`)) {
+              proj.tasks.splice(taskIndex, 1);
+              recalcProjectCompletion(proj);
+              saveToLocalStorage();
+              renderProjects(document.getElementById('globalSearch')?.value || '');
+              showToast(`Task "${taskName}" removed`, "danger");
+            }
+          }
+        }
+      };
+      btn.onclick = handler;
+    });
+  }
+
+  function attachProgressEvents() {
+    document.querySelectorAll('.update-progress-btn').forEach(btn => {
+      const handler = () => {
+        const taskId = parseInt(btn.dataset.id);
+        const input = btn.parentElement.querySelector('.task-progress-input');
+        let newVal = parseInt(input.value);
+        if (isNaN(newVal)) newVal = 0;
+        newVal = Math.min(100, Math.max(0, newVal));
+
+        for (let p of projectsData) {
+          let task = (p.tasks || []).find(t => t.id === taskId);
+          if (task) {
+            task.progress = newVal;
+            recalcProjectCompletion(p);
+            break;
+          }
+        }
+        saveToLocalStorage();
+        renderProjects(document.getElementById('globalSearch')?.value || '');
+        showToast(`Progress updated to ${newVal}%`, "success");
+      };
+      btn.onclick = handler;
+    });
+  }
+
+  function renderGanttChart() {
+    let tasksForGantt = [];
+    projectsData.forEach(proj => {
+      (proj.tasks || []).forEach(task => {
+        if (task.start_date && task.end_date) {
+          tasksForGantt.push({
+            id: task.id.toString(),
+            name: task.name,
+            start: task.start_date,
+            end: task.end_date,
+            progress: (task.progress || 0) / 100
+          });
+        }
+      });
+    });
+
+    const container = document.getElementById("gantt");
+    if (!container) return;
+    container.innerHTML = '';
+
+    if (tasksForGantt.length === 0) {
+      container.innerHTML = '<div class="alert alert-light text-center p-4 mb-0"><i class="bi bi-info-circle fs-3"></i><p class="mt-2 mb-0">Add tasks with dates to see Gantt timeline</p></div>';
+      return;
+    }
+
+    try {
+      new Gantt("#gantt", tasksForGantt, {
+        on_date_change: (task, start, end) => {
+          let tid = parseInt(task.id);
+          for (let p of projectsData) {
+            let t = (p.tasks || []).find(ts => ts.id === tid);
+            if (t) {
+              t.start_date = start.toISOString().slice(0,10);
+              t.end_date = end.toISOString().slice(0,10);
+              saveToLocalStorage();
+              showToast("Task dates updated", "success");
+              renderProjects(document.getElementById('globalSearch')?.value || '');
+              break;
+            }
+          }
+        },
+        on_progress_change: (task, prog) => {
+          let tid = parseInt(task.id);
+          for (let p of projectsData) {
+            let t = (p.tasks || []).find(ts => ts.id === tid);
+            if (t) {
+              t.progress = Math.round(prog * 100);
+              recalcProjectCompletion(p);
+              saveToLocalStorage();
+              showToast("Progress synced via Gantt", "success");
+              renderProjects(document.getElementById('globalSearch')?.value || '');
+              break;
+            }
+          }
+        }
+      });
+    } catch(e) {
+      console.warn(e);
+      container.innerHTML = '<div class="alert alert-danger mb-0">Unable to load Gantt chart.</div>';
+    }
+  }
+
+  function showToast(msg, type='success') {
+    let toastDiv = document.createElement('div');
+    toastDiv.className = 'toast-notification';
+    const bgColor = type === 'success' ? 'bg-success' : (type === 'danger' ? 'bg-danger' : 'bg-info');
+    toastDiv.innerHTML = `<div class="toast align-items-center text-white ${bgColor} border-0 show" role="alert">
+      <div class="d-flex">
+        <div class="toast-body">${msg}</div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+      </div>
+    </div>`;
+    document.body.appendChild(toastDiv);
+    setTimeout(() => toastDiv.remove(), 3000);
+  }
+
+  document.getElementById('addProjectForm')?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    let newId = projectsData.length ? Math.max(...projectsData.map(p => p.id)) + 1 : 1;
+    let newProj = {
+      id: newId,
+      name: document.getElementById('projName').value,
+      type: document.getElementById('projType').value,
+      start_date: document.getElementById('projStart').value,
+      end_date: document.getElementById('projEnd').value,
+      completion: 0,
+      tasks: []
+    };
+    projectsData.push(newProj);
+    saveToLocalStorage();
+    renderProjects(document.getElementById('globalSearch')?.value || '');
+    bootstrap.Modal.getInstance(document.getElementById('addProjectModal')).hide();
+    document.getElementById('addProjectForm').reset();
+    showToast(`Project "${newProj.name}" created successfully!`, "success");
   });
-  
-  window.showToast = showToast;
-  {% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}{% for category, message in messages %}window.addEventListener('load', () => showToast('{{ message }}', '{{ category if category != "message" else "success" }}'));{% endfor %}{% endif %}{% endwith %}
-  const urlMsg = new URLSearchParams(window.location.search).get('message'); if(urlMsg) showToast(decodeURIComponent(urlMsg), 'success');
-  const urlErr = new URLSearchParams(window.location.search).get('error'); if(urlErr) showToast(decodeURIComponent(urlErr), 'danger');
+
+  document.getElementById('editProjectForm')?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    let id = parseInt(document.getElementById('editProjectId').value);
+    let proj = projectsData.find(p => p.id === id);
+    if (proj) {
+      proj.name = document.getElementById('editName').value;
+      proj.type = document.getElementById('editType').value;
+      proj.start_date = document.getElementById('editStart').value;
+      proj.end_date = document.getElementById('editEnd').value;
+      saveToLocalStorage();
+      renderProjects(document.getElementById('globalSearch')?.value || '');
+      bootstrap.Modal.getInstance(document.getElementById('editProjectModal')).hide();
+      showToast("Project updated", "success");
+    }
+  });
+
+  document.getElementById('editTaskForm')?.addEventListener('submit', saveTaskEdit);
+
+  const editProgressSlider = document.getElementById('editTaskProgressSlider');
+  const editProgressInput = document.getElementById('editTaskProgress');
+  if (editProgressSlider && editProgressInput) {
+    editProgressSlider.addEventListener('input', (e) => syncTaskProgress(e.target.value));
+    editProgressInput.addEventListener('input', (e) => syncTaskProgress(e.target.value));
+  }
+
+  const modalImageInput = document.getElementById('modalImageInput');
+  const modalImagePreview = document.getElementById('modalImagePreview');
+  const modalVideoInput = document.getElementById('modalVideoInput');
+  const modalVideoPreview = document.getElementById('modalVideoPreview');
+
+  if (modalImageInput) {
+    modalImageInput.addEventListener('change', function(e) {
+      modalImagePreview.innerHTML = '';
+      const files = Array.from(e.target.files);
+      files.forEach((file, idx) => {
+        const reader = new FileReader();
+        reader.onload = function(ev) {
+          const preview = document.createElement('div');
+          preview.className = 'file-preview-item';
+          preview.innerHTML = `
+            <img src="${ev.target.result}" style="width: 60px; height: 60px; object-fit: cover; border-radius: 8px; border: 1px solid #e2e8f0;">
+            <span class="badge bg-primary position-absolute top-0 start-100 translate-middle rounded-pill" style="font-size: 9px;">${idx+1}</span>
+          `;
+          modalImagePreview.appendChild(preview);
+        };
+        reader.readAsDataURL(file);
+      });
+    });
+  }
+
+  if (modalVideoInput) {
+    modalVideoInput.addEventListener('change', function(e) {
+      modalVideoPreview.innerHTML = '';
+      const files = Array.from(e.target.files);
+      files.forEach((file, idx) => {
+        const preview = document.createElement('div');
+        preview.className = 'file-preview-item';
+        preview.innerHTML = `
+          <div style="width: 60px; height: 60px; background: #1e293b; border-radius: 8px; display: flex; align-items: center; justify-content: center; border: 1px solid #cbd5e1;">
+            <i class="bi bi-camera-reels-fill text-white fs-3"></i>
+          </div>
+          <span class="badge bg-primary position-absolute top-0 start-100 translate-middle rounded-pill" style="font-size: 9px;">${idx+1}</span>
+        `;
+        modalVideoPreview.appendChild(preview);
+      });
+    });
+  }
+
+  document.getElementById('globalSearch')?.addEventListener('input', (e) => {
+    renderProjects(e.target.value);
+  });
+
+  const sidebar = document.getElementById('sidebar');
+  const mobileToggle = document.getElementById('mobileMenuToggle');
+  const overlay = document.getElementById('mobileOverlay');
+
+  mobileToggle?.addEventListener('click', () => {
+    sidebar.classList.toggle('mobile-open');
+    overlay.classList.toggle('active');
+  });
+
+  overlay?.addEventListener('click', () => {
+    sidebar.classList.remove('mobile-open');
+    overlay.classList.remove('active');
+  });
+
+  const logoutHandler = (e) => {
+    e?.preventDefault?.();
+    showToast("Logged out (demo)", "info");
+    setTimeout(() => {
+      projectsData = [];
+      saveToLocalStorage();
+      renderProjects("");
+    }, 500);
+  };
+
+  document.getElementById('logoutLink')?.addEventListener('click', logoutHandler);
+  document.getElementById('dropdownLogout')?.addEventListener('click', logoutHandler);
+
+  document.getElementById('dashboardLink')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    renderProjects(document.getElementById('globalSearch')?.value || '');
+  });
+
+  window.openEditTaskModal = openEditTaskModal;
+  window.showMediaDemo = (src, type) => {
+    let container = document.getElementById('mediaViewerContent');
+    container.innerHTML = type === 'image'
+      ? `<img src="${src}" class="img-fluid rounded" style="max-height:75vh">`
+      : `<video controls src="${src}" class="w-100 rounded" style="max-height:75vh"></video>`;
+    new bootstrap.Modal(document.getElementById('mediaViewerModal')).show();
+  };
+
+  // Close mobile sidebar when viewport becomes desktop size
+  window.addEventListener('resize', () => {
+    if (window.innerWidth >= 992) {
+      sidebar.classList.remove('mobile-open');
+      overlay.classList.remove('active');
+    }
+  });
+
+  loadFromLocalStorage();
+  renderProjects("");
+  updateStats();
 </script>
 </body>
 </html>

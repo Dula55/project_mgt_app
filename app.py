@@ -35,6 +35,12 @@ import hashlib
 import re
 from werkzeug.utils import secure_filename
 
+from dotenv import load_dotenv
+
+# Load .env from the project folder if it exists
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+load_dotenv(os.path.join(BASE_DIR, ".env"))
+
 # ================= APP INIT =================
 app = Flask(__name__)
 
@@ -46,14 +52,50 @@ app.config["MAX_CONTENT_LENGTH"] = 20 * 1024 * 1024
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=7)
 
-# Email configuration
-app.config["MAIL_SERVER"] = os.environ.get("MAIL_SERVER", "smtp.gmail.com")
-app.config["MAIL_PORT"] = int(os.environ.get("MAIL_PORT", 587))
-app.config["MAIL_USE_TLS"] = os.environ.get("MAIL_USE_TLS", "True").lower() == "true"
-app.config["MAIL_USE_SSL"] = os.environ.get("MAIL_USE_SSL", "False").lower() == "true"
-app.config["MAIL_USERNAME"] = os.environ.get("MAIL_USERNAME", "")
-app.config["MAIL_PASSWORD"] = os.environ.get("MAIL_PASSWORD", "")
-app.config["MAIL_DEFAULT_SENDER"] = os.environ.get("MAIL_DEFAULT_SENDER", app.config["MAIL_USERNAME"])
+# ================= EMAIL CONFIGURATION (FIXED & ROBUST) =================
+def str_to_bool(value):
+    return str(value).strip().lower() in ["true", "1", "yes"]
+
+# Ensure .env is loaded properly
+from dotenv import load_dotenv
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+load_dotenv(os.path.join(BASE_DIR, ".env"))
+
+# Read environment variables safely
+MAIL_USERNAME = os.getenv("MAIL_USERNAME")
+MAIL_PASSWORD = os.getenv("MAIL_PASSWORD")
+MAIL_SERVER = os.getenv("MAIL_SERVER", "smtp.gmail.com")
+MAIL_PORT = os.getenv("MAIL_PORT", "587")
+MAIL_USE_TLS = os.getenv("MAIL_USE_TLS", "True")
+MAIL_USE_SSL = os.getenv("MAIL_USE_SSL", "False")
+
+# Apply to Flask config
+app.config["MAIL_USERNAME"] = MAIL_USERNAME
+app.config["MAIL_PASSWORD"] = MAIL_PASSWORD
+app.config["MAIL_SERVER"] = MAIL_SERVER
+
+# Safe integer conversion
+try:
+    app.config["MAIL_PORT"] = int(MAIL_PORT)
+except ValueError:
+    app.config["MAIL_PORT"] = 587
+
+# Safe boolean conversion
+app.config["MAIL_USE_TLS"] = str_to_bool(MAIL_USE_TLS)
+app.config["MAIL_USE_SSL"] = str_to_bool(MAIL_USE_SSL)
+
+# Default sender
+app.config["MAIL_DEFAULT_SENDER"] = MAIL_USERNAME
+
+# Debug (VERY IMPORTANT for troubleshooting)
+print("==== MAIL CONFIG DEBUG ====")
+print("MAIL_USERNAME:", MAIL_USERNAME)
+print("MAIL_PASSWORD:", "SET" if MAIL_PASSWORD else "NOT SET")
+print("MAIL_SERVER:", MAIL_SERVER)
+print("MAIL_PORT:", app.config["MAIL_PORT"])
+print("MAIL_USE_TLS:", app.config["MAIL_USE_TLS"])
+print("===========================")
+
 
 # ================= MODELS =================
 from models import db, Project, Task, MediaFile, TeamMember
@@ -111,22 +153,88 @@ def get_project_duration_days(project):
     return 0
 
 def send_invitation_email(email, project_name, project_id, invite_token):
+    """Send invitation email to a team member"""
+    # Check if email is configured
     if not app.config["MAIL_USERNAME"] or not app.config["MAIL_PASSWORD"]:
-        return True
-
+        print(f"Email not configured. Would have sent invite to {email}")
+        print(f"Invite link would be: {url_for('accept_invitation', token=invite_token, _external=True)}")
+        return True  # Return True for testing when email not configured
+    
     try:
         with app.app_context():
             invite_link = url_for("accept_invitation", token=invite_token, _external=True)
+            
+            # Create email message
             msg = Message(
                 subject=f"Invitation to join project: {project_name}",
-                recipients=[email],
-                body=f"You have been invited to join project: {project_name}\n\nClick: {invite_link}",
+                sender=app.config["MAIL_DEFAULT_SENDER"],
+                recipients=[email]
             )
+            
+            # Plain text body
+            msg.body = f"""
+You have been invited to join the project: {project_name}
+
+Click the link below to accept the invitation:
+{invite_link}
+
+This invitation will expire in 7 days.
+
+Best regards,
+Project Management Team
+"""
+            
+            # HTML body
+            msg.html = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{ font-family: Arial, sans-serif; }}
+        .container {{ padding: 20px; background-color: #f4f4f4; }}
+        .content {{ background-color: white; padding: 20px; border-radius: 5px; }}
+        .button {{ 
+            display: inline-block; 
+            padding: 10px 20px; 
+            background-color: #4CAF50; 
+            color: white; 
+            text-decoration: none; 
+            border-radius: 5px;
+            margin: 20px 0;
+        }}
+        .footer {{ font-size: 12px; color: #666; margin-top: 20px; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="content">
+            <h2>Project Invitation</h2>
+            <p>You have been invited to join the project: <strong>{project_name}</strong></p>
+            <p>Click the button below to accept the invitation:</p>
+            <p><a href="{invite_link}" class="button">Accept Invitation</a></p>
+            <p>Or copy and paste this link into your browser:</p>
+            <p>{invite_link}</p>
+            <p>This invitation will expire in 7 days.</p>
+            <div class="footer">
+                <p>Best regards,<br>Project Management Team</p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+"""
+            
+            # Send email
             mail.send(msg)
+            print(f"✅ Invitation email sent to {email}")
             return True
+            
     except Exception as e:
-        print(f"Email error: {e}")
-        return True
+        print(f"❌ Email error for {email}: {str(e)}")
+        # Log the invite link for testing
+        invite_link = url_for("accept_invitation", token=invite_token, _external=True)
+        print(f"📧 Invite link (for testing): {invite_link}")
+        return False
 
 def safe_commit():
     try:
@@ -136,10 +244,6 @@ def safe_commit():
         db.session.rollback()
         raise
 
-# ================= HEALTH =================
-@app.route("/health")
-def health_check():
-    return "OK", 200
 
 # ================= INDEX =================
 @app.route("/")
@@ -148,7 +252,10 @@ def index():
         member_id = session.get("member_id")
         if member_id:
             member = TeamMember.query.get(member_id)
-            projects = member.projects if member else Project.query.all()
+            if member:
+                projects = member.projects
+            else:
+                projects = Project.query.all()
         else:
             projects = Project.query.all()
 
@@ -243,83 +350,149 @@ def edit_project(project_id):
     
     return redirect(url_for("index"))
 
+# ================= VIEW PROJECT MEMBERS =================
+@app.route("/project_members/<int:project_id>")
+def project_members(project_id):
+    """View all members of a project"""
+    project = Project.query.get_or_404(project_id)
+    return render_template("project_members.html", project=project)
+
 # ================= INVITE MEMBERS =================
 @app.route("/invite_members/<int:project_id>", methods=["POST"])
 def invite_members(project_id):
+    """Invite members to join a project"""
     project = Project.query.get_or_404(project_id)
     emails_input = request.form.get("emails", "")
+    
+    # Split by comma, newline, or semicolon
     emails = re.split(r"[,\n;]+", emails_input)
     emails = [email.strip().lower() for email in emails if email.strip()]
 
+    if not emails:
+        flash("Please enter at least one email address", "error")
+        return redirect(url_for("project_members", project_id=project.id))
+
     invited_count = 0
     failed = []
+    success_emails = []
 
     for email in emails:
+        # Validate email format
         if not re.match(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$", email):
-            failed.append(f"{email} (invalid)")
+            failed.append(f"{email} (invalid format)")
             continue
 
         try:
+            # Check if member already exists
             member = TeamMember.query.filter_by(email=email).first()
             if not member:
-                member = TeamMember(email=email, name=email.split("@")[0])
+                # Create new member
+                member = TeamMember(
+                    email=email, 
+                    name=email.split("@")[0]
+                )
                 db.session.add(member)
-                db.session.flush()
+                db.session.flush()  # Get the ID without committing
 
-            if member not in project.team_members:
-                project.team_members.append(member)
-                token_data = f"{member.id}_{project.id}_{datetime.utcnow().timestamp()}"
-                invite_token = hashlib.sha256(token_data.encode()).hexdigest()
-                member.invite_token = invite_token
-                member.token_expiry = datetime.utcnow() + timedelta(days=7)
+            # Check if member is already in project
+            if member in project.team_members:
+                failed.append(f"{email} (already a member)")
+                continue
 
-                if send_invitation_email(email, project.name, project.id, invite_token):
-                    invited_count += 1
-                else:
-                    failed.append(f"{email} (email failed)")
+            # Generate unique invitation token
+            token_data = f"{member.id}_{project.id}_{datetime.utcnow().timestamp()}_{secrets.token_hex(8)}"
+            invite_token = hashlib.sha256(token_data.encode()).hexdigest()
+            
+            # Store token in member record
+            member.invite_token = invite_token
+            member.token_expiry = datetime.utcnow() + timedelta(days=7)
+
+            # Add member to project
+            project.team_members.append(member)
+            
+            # Try to send email
+            email_sent = send_invitation_email(email, project.name, project.id, invite_token)
+            
+            if email_sent:
+                invited_count += 1
+                success_emails.append(email)
             else:
-                failed.append(f"{email} (already member)")
+                # Remove member from project if email fails
+                project.team_members.remove(member)
+                failed.append(f"{email} (email sending failed)")
+            
+            # Commit after each successful addition
+            db.session.commit()
+                
         except Exception as e:
-            failed.append(f"{email} ({e})")
+            db.session.rollback()
+            failed.append(f"{email} ({str(e)})")
+            print(f"Error inviting {email}: {str(e)}")
+            continue
 
+    # Final message
+    if invited_count > 0:
+        flash(f"✅ Successfully invited {invited_count} member(s): {', '.join(success_emails[:3])}", "success")
+    if failed:
+        flash(f"⚠️ Some invitations failed: {', '.join(failed[:5])}", "warning")
+
+    return redirect(url_for("project_members", project_id=project.id))
+
+# ================= REMOVE MEMBER FROM PROJECT =================
+@app.route("/remove_member/<int:project_id>/<int:member_id>")
+def remove_member(project_id, member_id):
+    """Remove a member from a project"""
+    project = Project.query.get_or_404(project_id)
+    member = TeamMember.query.get_or_404(member_id)
+    
     try:
-        db.session.commit()
+        if member in project.team_members:
+            project.team_members.remove(member)
+            db.session.commit()
+            flash(f"Removed {member.name or member.email} from the project", "success")
+        else:
+            flash("Member not found in this project", "error")
     except Exception as e:
         db.session.rollback()
-        flash(f"Database error: {str(e)}", "error")
-        return redirect(url_for("index"))
-
-    if invited_count > 0:
-        flash(f"Successfully invited {invited_count} member(s)!", "success")
-    if failed:
-        flash(f"Some invitations failed: {', '.join(failed[:3])}", "error")
-
-    return redirect(url_for("index"))
+        flash(f"Error removing member: {str(e)}", "error")
+    
+    return redirect(url_for("project_members", project_id=project.id))
 
 # ================= ACCEPT INVITATION =================
 @app.route("/accept_invitation/<token>")
 def accept_invitation(token):
+    """Accept project invitation"""
+    # Find member with this token
     member = TeamMember.query.filter_by(invite_token=token).first()
+    
     if not member:
-        flash("Invalid invitation link", "error")
+        flash("Invalid or expired invitation link. Please request a new invitation.", "error")
         return redirect(url_for("index"))
 
+    # Check if token is expired
     if member.token_expiry and datetime.utcnow() > member.token_expiry:
-        flash("Invitation expired", "error")
+        flash("Invitation link has expired. Please request a new invitation.", "error")
         return redirect(url_for("index"))
 
+    # Set session variables
     session["member_id"] = member.id
     session["member_name"] = member.name
     session["member_email"] = member.email
+    session.permanent = True
 
-    flash(f"Welcome {member.name}!", "success")
+    # Clear the token after use for security
+    member.invite_token = None
+    member.token_expiry = None
+    db.session.commit()
+
+    flash(f"Welcome {member.name or member.email}! You have been added to the team.", "success")
     return redirect(url_for("index"))
 
 # ================= LOGOUT =================
 @app.route("/logout")
 def logout():
     session.clear()
-    flash("Logged out", "info")
+    flash("You have been logged out", "info")
     return redirect(url_for("index"))
 
 # ================= UPDATE TASK PROGRESS (DASHBOARD) =================
@@ -674,6 +847,10 @@ def not_found(e):
 def internal_error(e):
     db.session.rollback()
     return "<h1>500</h1><p>Internal server error</p><a href='/'>Home</a>", 500
+
+@app.route('/health')
+def health_check():
+    return 'OK', 200
 
 @app.teardown_appcontext
 def shutdown_session(exception=None):

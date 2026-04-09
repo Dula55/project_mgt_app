@@ -1,33 +1,26 @@
-app = 'project-mgt-app'
-primary_region = 'jnb'
+# fly.toml
+app = "project-mgt-app"
 
 [build]
+  dockerfile = "Dockerfile"
 
-[http_service]
+[[services]]
   internal_port = 5000
-  force_https = true
-  auto_stop_machines = false
-  auto_start_machines = true
-  min_machines_running = 1
-  max_machines_running = 1
-  processes = ['app']
-  
-  [[http_service.checks]]
-    grace_period = "45s"
-    interval = "30s"
-    timeout = "10s"
-    method = "get"
-    path = "/health"
+  protocol = "tcp"
 
-[[vm]]
-  memory = '1gb'
-  cpu_kind = 'shared'
-  cpus = 1
+  [services.concurrency]
+    hard_limit = 25
+    soft_limit = 20
 
-[env]
-  GUNICORN_WORKERS = "1"
-  GUNICORN_THREADS = "1"
-  MALLOC_ARENA_MAX = "2"
-  PYTHONOPTIMIZE = "1"
-  FLASK_ENV = "production"
-  FLASK_DEBUG = "0"
+  [[services.ports]]
+    handlers = ["http"]
+    port = 80
+
+  [[services.ports]]
+    handlers = ["tls", "http"]
+    port = 443
+
+  [[services.tcp_checks]]
+    interval = 10000
+    timeout = 2000
+    grace_period = "10s"

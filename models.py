@@ -84,6 +84,8 @@ class TeamMember(db.Model):
 
     invite_token = db.Column(db.String(255))
     token_expiry = db.Column(db.DateTime)
+    invited_by_id = db.Column(db.Integer, db.ForeignKey('team_member.id'), nullable=True)
+    invited_by = db.relationship('TeamMember', remote_side=[id], backref='invited_members')
 
 
 # ================= MANY-TO-MANY =================
