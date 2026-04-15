@@ -1,104 +1,219 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{{ project.name }} - Report</title>
 
-    <!-- Plotly & Bootstrap -->
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" />
+
+    <style>
+        body { background: #f8f9fa; }
+        .card { border: 0; border-radius: 18px; }
+        .chart-box { min-height: 380px; }
+        .page-break { page-break-before: always; }
+        .report-wrap { background: #fff; border-radius: 24px; }
+        @media print {
+            .no-print { display: none !important; }
+            body { background: #fff; }
+            .report-wrap { box-shadow: none !important; }
+        }
+    </style>
 </head>
-<body class="d-flex flex-column min-vh-100 bg-light">
+<body class="d-flex flex-column min-vh-100">
+    <div class="container my-4 flex-grow-1">
+        <div id="reportContent" class="report-wrap p-4 p-md-5 shadow-sm">
+            <div class="text-center mb-4">
+                <h2 class="fw-bold text-primary mb-2">{{ project.name }} - Progress Report</h2>
+                <p class="lead mb-2 text-muted">{{ project.project_type }}</p>
+                <div class="d-flex flex-wrap justify-content-center gap-2 mt-3">
+                    <span class="badge bg-success fs-6 px-3 py-2">Overall Completion: {{ "%.1f"|format(project.completion) }}%</span>
+                    {% if project.start_date %}
+                    <span class="badge bg-secondary fs-6 px-3 py-2">Start: {{ project.start_date }}</span>
+                    {% endif %}
+                    {% if project.end_date %}
+                    <span class="badge bg-secondary fs-6 px-3 py-2">End: {{ project.end_date }}</span>
+                    {% endif %}
+                </div>
+            </div>
 
-    <!-- Main Container -->
-    <div class="container my-5 flex-grow-1">
-
-        <!-- Project Header -->
-        <div class="text-center mb-5">
-            <h2 class="fw-bold text-primary">{{ project.name }} - Progress Report</h2>
-            <p class="lead text-muted">{{ project.project_type }}</p>
-            <span class="badge bg-success fs-6 px-3 py-2">
-                Overall Completion: {{ "%.1f"|format(project.completion) }}%
-            </span>
-        </div>
-
-        <!-- Charts Row -->
-        <div class="row g-4">
-            <div class="col-md-6">
-                <div class="card shadow-sm">
-                    <div class="card-header bg-primary text-white">
-                        <strong>📊 Task Progress</strong>
+            <div class="row g-4">
+                <div class="col-lg-6">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-header bg-primary text-white"><strong>Task Progress (Bar Chart)</strong></div>
+                        <div class="card-body"><div id="task_progress_chart" class="chart-box"></div></div>
                     </div>
-                    <div class="card-body">
-                        <div id="task_progress_chart" style="height: 400px;"></div>
+                </div>
+                <div class="col-lg-6">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-header bg-success text-white"><strong>Completion Overview (Pie Chart)</strong></div>
+                        <div class="card-body"><div id="completion_chart" class="chart-box"></div></div>
                     </div>
                 </div>
             </div>
 
-            <div class="col-md-6">
-                <div class="card shadow-sm">
-                    <div class="card-header bg-info text-white">
-                        <strong>📈 Completion Overview</strong>
+            <div class="row g-4 mt-1">
+                <div class="col-12">
+                    <div class="card shadow-sm">
+                        <div class="card-header bg-info text-white"><strong>Project Timeline (Gantt Chart)</strong></div>
+                        <div class="card-body">
+                            <div id="gantt_chart" class="chart-box" style="min-height: 500px;"></div>
+                        </div>
                     </div>
+                </div>
+            </div>
+
+            <div class="row g-4 mt-1">
+                <div class="col-12">
+                    <div class="card shadow-sm">
+                        <div class="card-header bg-dark text-white"><strong>Cost Tracking (S-Curve)</strong></div>
+                        <div class="card-body">
+                            <div id="s_curve_chart" class="chart-box" style="min-height: 460px;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-4 mt-1">
+                <div class="col-12">
+                    <div class="card shadow-sm">
+                        <div class="card-header bg-warning text-dark"><strong>Team Performance</strong></div>
+                        <div class="card-body">
+                            <div id="team_chart" class="chart-box" style="min-height: 460px;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-4">
+                <div class="card shadow-sm">
+                    <div class="card-header bg-light"><strong>Task Summary</strong></div>
                     <div class="card-body">
-                        <div id="completion_chart" style="height: 400px;"></div>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-striped align-middle mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Task</th>
+                                        <th>Category</th>
+                                        <th>Assigned To</th>
+                                        <th>Progress</th>
+                                        <th>Planned Cost</th>
+                                        <th>Actual Cost</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for task in tasks %}
+                                    <tr>
+                                        <td>{{ task.name }}</td>
+                                        <td>{{ task.task_category }}</td>
+                                        <td>{{ task.assigned_to }}</td>
+                                        <td>{{ "%.1f"|format(task.progress or 0) }}%</td>
+                                        <td>{{ "%.2f"|format(task.planned_cost or 0) }}</td>
+                                        <td>{{ "%.2f"|format(task.actual_cost or 0) }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Action Buttons -->
-        <div class="text-center mt-5">
-            <a href="{{ url_for('generate_report', project_id=project.id) }}" 
-               class="btn btn-success me-2 shadow-sm">
-               ⬇ Download Report (Word)
-            </a>
+        <div class="text-center mt-4 no-print">
+            <button onclick="downloadPDF()" class="btn btn-danger me-2 shadow-sm">⬇ Export Full Report (PDF)</button>
+            <a href="{{ url_for('generate_report', project_id=project.id) }}" class="btn btn-success me-2 shadow-sm">⬇ Download Word</a>
             <a href="/" class="btn btn-secondary shadow-sm">← Back to Dashboard</a>
         </div>
     </div>
 
-    <!-- Footer -->
     <footer class="bg-dark text-white text-center py-3 mt-auto">
         <p class="mb-0">© 2026 PM-Scheduler & Monitor | Developed by Ramsulone Innovations & Services Ltd</p>
     </footer>
 
-    <!-- Bootstrap Bundle -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-
-    <!-- Plotly Charts -->
     <script>
-        // Tasks from Flask
-        var tasks = {{ tasks|tojson }};
+        const tasks = {{ tasks|tojson }};
+        const members = {{ members|tojson }};
 
-        // Extract names and progress
-        var taskNames = tasks.map(t => t.name);
-        var taskProgress = tasks.map(t => t.progress);
-
-        // Bar Chart (Task Progress)
-        var trace1 = {
-            x: taskNames,
-            y: taskProgress,
-            type: 'bar',
-            marker: { color: 'steelblue' }
-        };
-        var layout1 = {
+        Plotly.newPlot('task_progress_chart', [{
+            x: tasks.map(t => t.name),
+            y: tasks.map(t => Number(t.progress || 0)),
+            type: 'bar'
+        }], {
             yaxis: { title: 'Progress (%)', range: [0, 100] },
-            xaxis: { title: 'Tasks' },
-            margin: { t: 30 }
-        };
-        Plotly.newPlot('task_progress_chart', [trace1], layout1);
+            margin: { t: 20, l: 50, r: 20, b: 120 }
+        }, {responsive: true});
 
-        // Pie Chart (Overall Completion)
-        var overallCompletion = {{ project.completion }};
-        var trace2 = {
-            values: [overallCompletion, 100 - overallCompletion],
+        const overallCompletion = Number({{ project.completion|tojson }});
+        Plotly.newPlot('completion_chart', [{
+            values: [overallCompletion, Math.max(0, 100 - overallCompletion)],
             labels: ['Completed', 'Remaining'],
             type: 'pie',
-            marker: { colors: ['green', 'lightgrey'] }
-        };
-        var layout2 = { margin: { t: 30 } };
-        Plotly.newPlot('completion_chart', [trace2], layout2);
+            hole: 0.35
+        }], { margin: { t: 20, l: 10, r: 10, b: 10 } }, {responsive: true});
+
+        const ganttData = tasks.filter(t => t.start_date && t.end_date);
+        Plotly.newPlot('gantt_chart', [{
+            type: 'bar',
+            orientation: 'h',
+            y: ganttData.map(t => t.name),
+            x: ganttData.map(t => (new Date(t.end_date) - new Date(t.start_date)) / (1000 * 60 * 60 * 24)),
+            base: ganttData.map(t => t.start_date),
+            marker: { opacity: 0.85 }
+        }], {
+            xaxis: { title: 'Timeline', type: 'date' },
+            margin: { t: 20, l: 160, r: 30, b: 50 },
+            height: 500
+        }, {responsive: true});
+
+        fetch(`{{ url_for('s_curve_data', project_id=project.id) }}`)
+            .then(r => r.json())
+            .then(data => {
+                Plotly.newPlot('s_curve_chart', [
+                    { x: data.map(d => d.date), y: data.map(d => d.planned), type: 'scatter', mode: 'lines+markers', name: 'Planned Cost' },
+                    { x: data.map(d => d.date), y: data.map(d => d.actual), type: 'scatter', mode: 'lines+markers', name: 'Actual Cost' }
+                ], {
+                    xaxis: { title: 'Date' },
+                    yaxis: { title: 'Cost' },
+                    margin: { t: 20, l: 60, r: 20, b: 70 }
+                }, {responsive: true});
+            })
+            .catch(() => Plotly.newPlot('s_curve_chart', [], {title: 'No S-curve data available'}));
+
+        Plotly.newPlot('team_chart', [
+            {
+                x: members.map(m => m.name),
+                y: members.map(m => m.completed_tasks),
+                type: 'bar',
+                name: 'Completed Tasks'
+            },
+            {
+                x: members.map(m => m.name),
+                y: members.map(m => m.avg_progress),
+                type: 'bar',
+                name: 'Average Progress'
+            }
+        ], {
+            barmode: 'group',
+            xaxis: { title: 'Team Members' },
+            yaxis: { title: 'Count / %' },
+            margin: { t: 20, l: 60, r: 20, b: 110 }
+        }, {responsive: true});
+
+        function downloadPDF() {
+            const element = document.getElementById('reportContent');
+            const opt = {
+                margin: 0.35,
+                filename: "{{ project.name|replace(' ', '_') }}_Report.pdf",
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2, useCORS: true },
+                jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
+            };
+            html2pdf().set(opt).from(element).save();
+        }
     </script>
 </body>
 </html>

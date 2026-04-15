@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Invitation Settings - Project Management</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 2rem;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .card {
+            border-radius: 1rem;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            margin-bottom: 1.5rem;
+        }
+        .card-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 1rem 1rem 0 0 !important;
+            padding: 1.5rem;
+        }
+        .status-badge {
+            padding: 0.5rem 1rem;
+            border-radius: 2rem;
+            font-weight: 600;
+        }
+        .status-success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .status-error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .test-result {
+            margin-top: 1rem;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            display: none;
+        }
+        .test-result.show {
+            display: block;
+        }
+        .test-result.success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .test-result.error {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .spinner-border-sm {
+            width: 1rem;
+            height: 1rem;
+            margin-right: 0.5rem;
+        }
+        .config-item {
+            padding: 0.75rem;
+            background: #f8f9fa;
+            border-radius: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+        .config-label {
+            font-weight: 600;
+            color: #495057;
+        }
+        .config-value {
+            font-family: monospace;
+            color: #007bff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="text-center mb-4">
+            <i class="bi bi-envelope-paper-fill" style="font-size: 3rem; color: white;"></i>
+            <h1 class="text-white mt-2">Email Invitation Settings</h1>
+            <p class="text-white-50">Configure and test email invitations for team members</p>
+        </div>
+
+        <!-- Email Configuration Status -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-gear-fill me-2"></i>Email Configuration Status</h5>
+            </div>
+            <div class="card-body">
+                {% if email_configured %}
+                    <div class="status-badge status-success mb-3">
+                        <i class="bi bi-check-circle-fill me-2"></i>Email is configured and ready to send invitations
+                    </div>
+                {% else %}
+                    <div class="status-badge status-error mb-3">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>Email is NOT configured. Invitations will not work.
+                    </div>
+                    <div class="alert alert-warning">
+                        <i class="bi bi-info-circle-fill me-2"></i>
+                        <strong>How to fix:</strong> Create a <code>.env</code> file in your project root with:
+                        <pre class="mt-2 mb-0"><code>MAIL_USERNAME=dulasman5@gmail.com
+MAIL_PASSWORD=kxyk dysn whvw uemy
+MAIL_SERVER=smtp.gmail.com
+MAIL_PORT=587
+MAIL_USE_TLS=True
+MAIL_USE_SSL=False</code></pre>
+                    </div>
+                {% endif %}
+                
+                <h6 class="mt-3">Current Configuration:</h6>
+                <div class="config-item">
+                    <span class="config-label">SMTP Server:</span>
+                    <span class="config-value">{{ mail_server }}</span>
+                </div>
+                <div class="config-item">
+                    <span class="config-label">SMTP Port:</span>
+                    <span class="config-value">{{ mail_port }}</span>
+                </div>
+                <div class="config-item">
+                    <span class="config-label">Username:</span>
+                    <span class="config-value">{{ mail_username if mail_username else 'Not set' }}</span>
+                </div>
+                <div class="config-item">
+                    <span class="config-label">Password:</span>
+                    <span class="config-value">{{ '********' if mail_username else 'Not set' }}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Test Email Section -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-envelope-paper me-2"></i>Test Email Configuration</h5>
+            </div>
+            <div class="card-body">
+                <p>Send a test email to verify your email configuration is working correctly.</p>
+                <form id="testEmailForm">
+                    <div class="mb-3">
+                        <label for="testEmail" class="form-label">Test Email Address</label>
+                        <input type="email" class="form-control" id="testEmail" 
+                               placeholder="Enter email address to send test" required>
+                        <div class="form-text">We'll send a test email to this address</div>
+                    </div>
+                    <button type="submit" class="btn btn-primary" id="sendTestBtn">
+                        <i class="bi bi-send-fill me-2"></i>Send Test Email
+                    </button>
+                </form>
+                <div id="testResult" class="test-result"></div>
+            </div>
+        </div>
+
+        <!-- Invitation Testing Section -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-people-fill me-2"></i>Quick Invite Test</h5>
+            </div>
+            <div class="card-body">
+                <p>Test sending invitations to specific projects. Select a project and enter email addresses.</p>
+                
+                <form id="quickInviteForm">
+                    <div class="mb-3">
+                        <label for="projectSelect" class="form-label">Select Project</label>
+                        <select class="form-select" id="projectSelect" required>
+                            <option value="">Loading projects...</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="inviteEmails" class="form-label">Email Addresses</label>
+                        <textarea class="form-control" id="inviteEmails" rows="3" 
+                                  placeholder="Enter email addresses (one per line or comma separated)" required></textarea>
+                        <div class="form-text">Separate multiple emails with commas or new lines</div>
+                    </div>
+                    <button type="submit" class="btn btn-success" id="sendInviteTestBtn">
+                        <i class="bi bi-send-fill me-2"></i>Send Invitations
+                    </button>
+                </form>
+                <div id="inviteResult" class="test-result"></div>
+            </div>
+        </div>
+
+        <!-- Troubleshooting Guide -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-question-circle-fill me-2"></i>Troubleshooting Guide</h5>
+            </div>
+            <div class="card-body">
+                <div class="accordion" id="troubleshootingAccordion">
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#gmailHelp">
+                                <i class="bi bi-google me-2"></i> Gmail Configuration
+                            </button>
+                        </h2>
+                        <div id="gmailHelp" class="accordion-collapse collapse" data-bs-parent="#troubleshootingAccordion">
+                            <div class="accordion-body">
+                                <ol>
+                                    <li>Enable 2-Factor Authentication on your Google account</li>
+                                    <li>Generate an App Password:
+                                        <ul>
+                                            <li>Go to Google Account → Security</li>
+                                            <li>Under "Signing in to Google", select "App passwords"</li>
+                                            <li>Select "Mail" as the app and "Other" as the device</li>
+                                            <li>Copy the 16-character password</li>
+                                        </ul>
+                                    </li>
+                                    <li>Use the app password in your <code>.env</code> file</li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#commonIssues">
+                                <i class="bi bi-exclamation-triangle me-2"></i> Common Issues
+                            </button>
+                        </h2>
+                        <div id="commonIssues" class="accordion-collapse collapse" data-bs-parent="#troubleshootingAccordion">
+                            <div class="accordion-body">
+                                <ul>
+                                    <li><strong>"Less secure apps" error:</strong> Gmail no longer supports less secure apps. Use App Password instead.</li>
+                                    <li><strong>Authentication failed:</strong> Check your email and password in .env file</li>
+                                    <li><strong>Connection timeout:</strong> Check your internet connection and firewall settings</li>
+                                    <li><strong>Sender address rejected:</strong> MAIL_DEFAULT_SENDER must match MAIL_USERNAME</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Navigation -->
+        <div class="text-center mt-4">
+            <a href="{{ url_for('index') }}" class="btn btn-light">
+                <i class="bi bi-arrow-left me-2"></i>Back to Dashboard
+            </a>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        // Load projects for dropdown
+        function loadProjects() {
+            fetch('/gantt_data')
+                .then(response => response.json())
+                .then(tasks => {
+                    const projects = {};
+                    tasks.forEach(task => {
+                        if (!projects[task.project_id]) {
+                            projects[task.project_id] = { id: task.project_id, name: `Project ${task.project_id}` };
+                        }
+                    });
+                    
+                    const select = document.getElementById('projectSelect');
+                    select.innerHTML = '<option value="">Select a project</option>';
+                    
+                    // Also fetch project names from index or API
+                    fetch('/')
+                        .then(response => response.text())
+                        .then(html => {
+                            // Parse project names from the page if possible
+                            const parser = new DOMParser();
+                            const doc = parser.parseFromString(html, 'text/html');
+                            const projectElements = doc.querySelectorAll('[data-project-id]');
+                            projectElements.forEach(el => {
+                                const id = el.getAttribute('data-project-id');
+                                const name = el.getAttribute('data-project-name');
+                                if (id && name && projects[id]) {
+                                    projects[id].name = name;
+                                }
+                            });
+                            
+                            // Add options
+                            Object.values(projects).forEach(project => {
+                                const option = document.createElement('option');
+                                option.value = project.id;
+                                option.textContent = project.name;
+                                select.appendChild(option);
+                            });
+                        });
+                })
+                .catch(error => {
+                    console.error('Error loading projects:', error);
+                    const select = document.getElementById('projectSelect');
+                    select.innerHTML = '<option value="">Error loading projects</option>';
+                });
+        }
+        
+        // Test email sending
+        document.getElementById('testEmailForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const testEmail = document.getElementById('testEmail').value;
+            const sendBtn = document.getElementById('sendTestBtn');
+            const resultDiv = document.getElementById('testResult');
+            
+            if (!testEmail) {
+                showResult(resultDiv, 'Please enter a test email address', false);
+                return;
+            }
+            
+            // Disable button and show loading
+            sendBtn.disabled = true;
+            sendBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>Sending...';
+            resultDiv.classList.remove('show');
+            
+            try {
+                const response = await fetch('/test_email', {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.status === 'success') {
+                    showResult(resultDiv, `✅ Test email sent successfully to ${testEmail}! Check your inbox.`, true);
+                } else {
+                    showResult(resultDiv, `❌ Failed to send test email: ${data.message}`, false);
+                }
+            } catch (error) {
+                showResult(resultDiv, `❌ Error: ${error.message}`, false);
+            } finally {
+                sendBtn.disabled = false;
+                sendBtn.innerHTML = '<i class="bi bi-send-fill me-2"></i>Send Test Email';
+            }
+        });
+        
+        // Quick invite test
+        document.getElementById('quickInviteForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const projectId = document.getElementById('projectSelect').value;
+            const emails = document.getElementById('inviteEmails').value;
+            const sendBtn = document.getElementById('sendInviteTestBtn');
+            const resultDiv = document.getElementById('inviteResult');
+            
+            if (!projectId) {
+                showResult(resultDiv, 'Please select a project', false);
+                return;
+            }
+            
+            if (!emails.trim()) {
+                showResult(resultDiv, 'Please enter at least one email address', false);
+                return;
+            }
+            
+            // Disable button and show loading
+            sendBtn.disabled = true;
+            sendBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>Sending...';
+            resultDiv.classList.remove('show');
+            
+            try {
+                const formData = new FormData();
+                formData.append('emails', emails);
+                
+                const response = await fetch(`/invite_members/${projectId}`, {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    let message = `✅ Successfully sent ${data.invited_count} invitation(s)!`;
+                    if (data.success_emails.length > 0) {
+                        message += `<br><strong>Sent to:</strong> ${data.success_emails.join(', ')}`;
+                    }
+                    if (data.failed_count > 0) {
+                        message += `<br><strong>Failed:</strong> ${data.failed_emails.join(', ')}`;
+                    }
+                    showResult(resultDiv, message, true);
+                    
+                    // Clear the textarea after successful send
+                    if (data.invited_count > 0) {
+                        document.getElementById('inviteEmails').value = '';
+                    }
+                } else {
+                    showResult(resultDiv, `❌ Failed to send invitations: ${data.message || 'Unknown error'}`, false);
+                }
+            } catch (error) {
+                showResult(resultDiv, `❌ Error: ${error.message}`, false);
+            } finally {
+                sendBtn.disabled = false;
+                sendBtn.innerHTML = '<i class="bi bi-send-fill me-2"></i>Send Invitations';
+            }
+        });
+        
+        function showResult(element, message, isSuccess) {
+            element.innerHTML = message;
+            element.className = `test-result show ${isSuccess ? 'success' : 'error'}`;
+            
+            // Auto-hide after 10 seconds for success, 15 for error
+            setTimeout(() => {
+                element.classList.remove('show');
+            }, isSuccess ? 10000 : 15000);
+        }
+        
+        // Load projects when page loads
+        loadProjects();
+        
+        // Add manual entry for project ID if needed
+        const projectSelect = document.getElementById('projectSelect');
+        if (projectSelect) {
+            // You can also add an option to manually enter project ID
+            const manualOption = document.createElement('option');
+            manualOption.value = "manual";
+            manualOption.textContent = "Enter project ID manually...";
+            projectSelect.appendChild(manualOption);
+        }
+    </script>
+</body>
+</html>
