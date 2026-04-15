@@ -168,7 +168,7 @@
 
     <div class="login-header">
         <h1>Welcome Back</h1>
-        <p>Login to access your projects across all devices</p>
+        <p>Login to your account</p>
     </div>
 
     <div class="login-form">
@@ -195,18 +195,21 @@
                 <input type="password" name="password" required placeholder="Enter your password">
             </div>
 
+            <div class="form-check">
+                <input type="checkbox" name="remember">
+                <label>Remember Me</label>
+            </div>
+
             <button type="submit" class="login-btn">Login</button>
         </form>
 
         <!-- Links -->
         <div class="links">
             <p>
-                Don't have an account?
+                Don’t have an account?
                 <a href="{{ url_for('register') }}">Register</a>
             </p>
-            <p>
-                <a href="#" style="font-size: 12px;">Forgot password?</a>
-            </p>
+            
         </div>
 
         <!-- Admin -->
@@ -215,11 +218,6 @@
                 🔐 Admin Portal
                 <span class="admin-icon">Admin</span>
             </a>
-        </div>
-
-        <div style="text-align: center; margin-top: 20px; font-size: 12px; color: #999;">
-            <p>✓ Your projects sync across all devices</p>
-            <p>✓ Login with same credentials anywhere</p>
         </div>
 
     </div>

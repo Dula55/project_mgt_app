@@ -51,10 +51,6 @@ class TeamMember(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(255), nullable=False)
     email = db.Column(db.String(255), unique=True, nullable=False, index=True)
-    
-    # Link to User account (one-to-one)
-    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), unique=True, nullable=True)
-    user = db.relationship("User", backref="team_member", uselist=False)
 
     invite_token = db.Column(db.String(255), nullable=True, index=True)
     token_expiry = db.Column(db.DateTime, nullable=True)
@@ -134,22 +130,12 @@ class MediaFile(db.Model):
     )
     uploaded_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
-
 class User(db.Model):
-    __tablename__ = "user"
-    
     id = db.Column(db.Integer, primary_key=True)
-    email = db.Column(db.String(120), unique=True, nullable=False, index=True)
+    email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
-    name = db.Column(db.String(120), nullable=False)
+    name = db.Column(db.String(120))
     role = db.Column(db.String(20), default="team_member")
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    
-    def set_password(self, password):
-        self.password_hash = generate_password_hash(password)
-    
-    def check_password(self, password):
-        return check_password_hash(self.password_hash, password)
 
 
 project_team = db.Table(
