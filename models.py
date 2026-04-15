@@ -1,4 +1,5 @@
 from flask_sqlalchemy import SQLAlchemy
+from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 
 db = SQLAlchemy()
@@ -128,6 +129,13 @@ class MediaFile(db.Model):
         index=True,
     )
     uploaded_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    password_hash = db.Column(db.String(255), nullable=False)
+    name = db.Column(db.String(120))
+    role = db.Column(db.String(20), default="team_member")
 
 
 project_team = db.Table(

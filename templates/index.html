@@ -12,12 +12,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
 
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
+    * { margin: 0; padding: 0; box-sizing: border-box; }
     :root {
       --sidebar-width: 270px;
       --accent-primary: #3b82f6;
@@ -33,10 +28,7 @@
       --transition: 0.25s ease-in-out;
     }
 
-    html, body {
-      height: 100%;
-    }
-
+    html, body { height: 100%; }
     body {
       font-family: 'Inter', sans-serif;
       background: #f8fafc;
@@ -46,19 +38,10 @@
       text-rendering: optimizeLegibility;
     }
 
-    a, button, input, select, textarea {
-      -webkit-tap-highlight-color: transparent;
-    }
+    a, button, input, select, textarea { -webkit-tap-highlight-color: transparent; }
+    button:active { transform: scale(0.98); }
 
-    button:active {
-      transform: scale(0.98);
-    }
-
-    .app-container {
-      display: flex;
-      min-height: 100vh;
-      position: relative;
-    }
+    .app-container { display: flex; min-height: 100vh; position: relative; }
 
     .sidebar {
       width: var(--sidebar-width);
@@ -84,542 +67,199 @@
       z-index: 2;
     }
 
-    .logo {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
+    .logo { display: flex; align-items: center; gap: 12px; }
     .logo-icon {
       background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
-      width: 44px;
-      height: 44px;
-      border-radius: 14px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: white;
-      font-size: 1.4rem;
-      flex: 0 0 auto;
+      width: 44px; height: 44px; border-radius: 14px;
+      display: flex; align-items: center; justify-content: center;
+      color: white; font-size: 1.4rem; flex: 0 0 auto;
       box-shadow: 0 8px 16px rgba(37, 99, 235, 0.18);
     }
-
     .logo-text h3 {
-      font-size: 1.15rem;
-      font-weight: 800;
-      margin: 0;
-      line-height: 1.2;
-      letter-spacing: -0.02em;
+      font-size: 1.15rem; font-weight: 800; margin: 0;
+      line-height: 1.2; letter-spacing: -0.02em;
     }
+    .logo-text p { font-size: 0.72rem; color: var(--text-muted); margin: 0; }
 
-    .logo-text p {
-      font-size: 0.72rem;
-      color: var(--text-muted);
-      margin: 0;
-    }
-
-    .nav-menu {
-      padding: 1.25rem 1rem 1.5rem;
-    }
-
-    .nav-item {
-      margin-bottom: 0.45rem;
-    }
-
+    .nav-menu { padding: 1.25rem 1rem 1.5rem; }
+    .nav-item { margin-bottom: 0.45rem; }
     .nav-link-custom {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 0.78rem 1rem;
-      border-radius: 14px;
-      color: var(--text-muted);
-      font-weight: 600;
-      transition: all 0.2s ease;
-      text-decoration: none;
+      display: flex; align-items: center; gap: 12px;
+      padding: 0.78rem 1rem; border-radius: 14px;
+      color: var(--text-muted); font-weight: 600;
+      transition: all 0.2s ease; text-decoration: none;
     }
-
-    .nav-link-custom i {
-      font-size: 1.2rem;
-    }
-
+    .nav-link-custom i { font-size: 1.2rem; }
     .nav-link-custom.active,
-    .nav-link-custom:hover {
-      background: var(--accent-soft);
-      color: var(--accent-primary);
-    }
+    .nav-link-custom:hover { background: var(--accent-soft); color: var(--accent-primary); }
+    .nav-link-custom.text-danger:hover { background: rgba(239,68,68,0.08); color: var(--accent-danger); }
 
-    .main-content {
-      margin-left: var(--sidebar-width);
-      width: 100%;
-      min-width: 0;
-      transition: margin var(--transition);
-    }
+    .main-content { margin-left: var(--sidebar-width); width: 100%; min-width: 0; transition: margin var(--transition); }
 
     .top-bar {
       background: rgba(255,255,255,0.96);
       backdrop-filter: blur(12px);
       padding: 0.85rem 1.25rem;
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
+      display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px;
       border-bottom: 1px solid var(--border-light);
-      position: sticky;
-      top: 0;
-      z-index: 1020;
+      position: sticky; top: 0; z-index: 1020;
     }
-
-    .top-bar-left,
-    .top-bar-right {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-      min-width: 0;
-      flex-wrap: wrap;
-    }
-
+    .top-bar-left, .top-bar-right { display: flex; align-items: center; gap: 0.75rem; min-width: 0; flex-wrap: wrap; }
     .btn-icon-round {
-      background: #f1f5f9;
-      border: none;
-      width: 42px;
-      height: 42px;
-      border-radius: 999px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      transition: 0.2s ease;
-      color: #334155;
-      flex: 0 0 auto;
+      background: #f1f5f9; border: none; width: 42px; height: 42px; border-radius: 999px;
+      display: inline-flex; align-items: center; justify-content: center;
+      transition: 0.2s ease; color: #334155; flex: 0 0 auto;
     }
-
-    .btn-icon-round:hover {
-      background: #e2e8f0;
-    }
+    .btn-icon-round:hover { background: #e2e8f0; }
 
     .search-wrapper {
-      background: #f1f5f9;
-      border-radius: 999px;
-      padding: 0.48rem 1rem;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      width: min(100%, 360px);
-      min-width: 0;
+      background: #f1f5f9; border-radius: 999px; padding: 0.48rem 1rem;
+      display: flex; align-items: center; gap: 8px; width: min(100%, 360px); min-width: 0;
       border: 1px solid transparent;
     }
-
     .search-wrapper:focus-within {
-      border-color: rgba(59,130,246,0.25);
-      background: #fff;
-      box-shadow: 0 0 0 4px rgba(59,130,246,0.08);
+      border-color: rgba(59,130,246,0.25); background: #fff; box-shadow: 0 0 0 4px rgba(59,130,246,0.08);
     }
-
-    .search-wrapper i {
-      color: #94a3b8;
-      flex: 0 0 auto;
-    }
-
+    .search-wrapper i { color: #94a3b8; flex: 0 0 auto; }
     .search-wrapper input {
-      background: transparent;
-      border: none;
-      outline: none;
-      width: 100%;
-      font-size: 0.92rem;
-      min-width: 0;
-      color: var(--text-dark);
+      background: transparent; border: none; outline: none; width: 100%; font-size: 0.92rem; min-width: 0; color: var(--text-dark);
     }
+    .btn-pill { border-radius: 999px; padding-left: 1rem; padding-right: 1rem; font-weight: 600; }
 
-    .btn-pill {
-      border-radius: 999px;
-      padding-left: 1rem;
-      padding-right: 1rem;
-      font-weight: 600;
+    .user-info {
+      display: flex; align-items: center; gap: 12px; background: var(--accent-soft);
+      padding: 0.5rem 1rem; border-radius: 999px; font-weight: 500; font-size: 0.9rem; transition: all 0.2s ease;
+      flex-wrap: wrap;
     }
+    .user-info:hover { background: #e0e7ff; }
+    .user-info i { color: var(--accent-primary); font-size: 1.1rem; }
+    .user-name { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-    .stats-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 1rem;
-      margin-bottom: 1.35rem;
+    .login-prompt { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .login-btn-custom {
+      background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+      color: white; border: none; padding: 0.5rem 1.2rem; border-radius: 999px; font-weight: 600; text-decoration: none;
+      transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 2px 4px rgba(59,130,246,0.2);
     }
+    .login-btn-custom:hover {
+      background: linear-gradient(135deg, var(--accent-secondary), var(--accent-primary));
+      color: white; transform: translateY(-1px); box-shadow: 0 4px 8px rgba(59,130,246,0.3);
+    }
+    .logout-btn {
+      background: transparent; color: var(--accent-danger); border: 1px solid rgba(239, 68, 68, 0.3); padding: 0.4rem 1rem;
+      border-radius: 999px; font-weight: 600; text-decoration: none; transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 6px; font-size: 0.85rem;
+    }
+    .logout-btn:hover { background: rgba(239, 68, 68, 0.1); border-color: var(--accent-danger); transform: translateY(-1px); color: var(--accent-danger); }
+    .info-text { font-size: 0.8rem; color: var(--text-muted); font-weight: 500; }
+    .admin-badge { background: #ef4444; color: white; padding: 0.2rem 0.6rem; border-radius: 999px; font-size: 0.7rem; font-weight: 600; margin-left: 8px; }
 
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1.35rem; }
     .stat-card {
-      background: white;
-      border-radius: 1.25rem;
-      padding: 1rem 1.1rem;
-      border: 1px solid var(--border-light);
-      box-shadow: var(--shadow-sm);
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
-      min-width: 0;
+      background: white; border-radius: 1.25rem; padding: 1rem 1.1rem; border: 1px solid var(--border-light);
+      box-shadow: var(--shadow-sm); transition: transform 0.2s ease, box-shadow 0.2s ease; min-width: 0;
     }
+    .stat-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
 
-    .stat-card:hover {
-      transform: translateY(-2px);
-      box-shadow: var(--shadow-md);
-    }
-
-    .projects-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-      gap: 1.25rem;
-      margin: 1.2rem 0 1.8rem;
-    }
-
+    .projects-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 1.25rem; margin: 1.2rem 0 1.8rem; }
     .project-card {
-      background: white;
-      border-radius: var(--card-radius);
-      border: 1px solid var(--border-light);
-      transition: all 0.2s ease;
-      overflow: hidden;
-      box-shadow: var(--shadow-sm);
-      min-width: 0;
+      background: white; border-radius: var(--card-radius); border: 1px solid var(--border-light);
+      transition: all 0.2s ease; overflow: hidden; box-shadow: var(--shadow-sm); min-width: 0;
     }
-
-    .project-card:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 12px 24px rgba(0,0,0,0.08);
-    }
-
+    .project-card:hover { transform: translateY(-2px); box-shadow: 0 12px 24px rgba(0,0,0,0.08); }
     .project-header {
-      padding: 1rem 1.1rem;
-      border-bottom: 1px solid #f0f2f5;
-      background: linear-gradient(180deg, #fff 0%, #fbfdff 100%);
+      padding: 1rem 1.1rem; border-bottom: 1px solid #f0f2f5; background: linear-gradient(180deg, #fff 0%, #fbfdff 100%);
     }
-
-    .project-title {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 12px;
-    }
-
-    .progress-badge {
-      background: #eef2ff;
-      color: #3730a3;
-      padding: 0.3rem 0.85rem;
-      border-radius: 999px;
-      font-weight: 700;
-      font-size: 0.9rem;
-      white-space: nowrap;
-    }
-
-    .project-actions {
-      display: flex;
-      gap: 10px;
-      margin-top: 12px;
-      flex-wrap: wrap;
-    }
-
+    .project-title { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 12px; }
+    .progress-badge { background: #eef2ff; color: #3730a3; padding: 0.3rem 0.85rem; border-radius: 999px; font-weight: 700; font-size: 0.9rem; white-space: nowrap; }
+    .project-actions { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
     .project-action-btn {
-      background: transparent;
-      border: 1px solid var(--border-light);
-      border-radius: 999px;
-      padding: 0.35rem 0.9rem;
-      font-size: 0.8rem;
-      font-weight: 600;
-      transition: all 0.2s ease;
-      color: var(--text-dark);
-      display: inline-flex;
-      align-items: center;
-      gap: 0.4rem;
+      background: transparent; border: 1px solid var(--border-light); border-radius: 999px; padding: 0.35rem 0.9rem; font-size: 0.8rem; font-weight: 600;
+      transition: all 0.2s ease; color: var(--text-dark); display: inline-flex; align-items: center; gap: 0.4rem;
     }
-
-    .project-action-btn:hover {
-      background: #f8fafc;
-      border-color: #dbe3ea;
-    }
-
-    .project-action-btn.edit-btn {
-      color: var(--accent-primary);
-      border-color: rgba(59,130,246,0.25);
-    }
-
-    .project-action-btn.delete-btn {
-      color: var(--accent-danger);
-      border-color: rgba(239,68,68,0.25);
-    }
-
-    .project-action-btn.delete-btn:hover {
-      background: rgba(239,68,68,0.05);
-    }
-
-    .project-action-btn.report-btn {
-      color: #0d9488;
-      border-color: rgba(13,148,136,0.25);
-    }
-    .project-action-btn.report-btn:hover {
-      background: rgba(13,148,136,0.05);
-      border-color: #0d9488;
-    }
+    .project-action-btn:hover { background: #f8fafc; border-color: #dbe3ea; }
+    .project-action-btn.edit-btn { color: var(--accent-primary); border-color: rgba(59,130,246,0.25); }
+    .project-action-btn.delete-btn { color: var(--accent-danger); border-color: rgba(239,68,68,0.25); }
+    .project-action-btn.delete-btn:hover { background: rgba(239,68,68,0.05); }
+    .project-action-btn.report-btn { color: #0d9488; border-color: rgba(13,148,136,0.25); }
+    .project-action-btn.report-btn:hover { background: rgba(13,148,136,0.05); border-color: #0d9488; }
 
     .task-item {
-      background: #fefefe;
-      border-radius: 1rem;
-      padding: 0.9rem;
-      margin-bottom: 0.75rem;
-      border: 1px solid #edf2f7;
-      transition: all 0.2s ease;
+      background: #fefefe; border-radius: 1rem; padding: 0.9rem; margin-bottom: 0.75rem; border: 1px solid #edf2f7; transition: all 0.2s ease;
     }
+    .task-item:hover { background: #ffffff; box-shadow: 0 2px 10px rgba(0,0,0,0.04); }
+    .task-name { word-break: break-word; }
+    .task-progress { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 8px; }
+    .task-progress-input { width: 72px; border-radius: 999px; border: 1px solid #cbd5e1; text-align: center; padding: 0.25rem 0.5rem; font-size: 0.9rem; }
+    .task-meta { line-height: 1.4; }
 
-    .task-item:hover {
-      background: #ffffff;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.04);
-    }
-
-    .task-name {
-      word-break: break-word;
-    }
-
-    .task-progress {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 10px;
-      margin-top: 8px;
-    }
-
-    .task-progress-input {
-      width: 72px;
-      border-radius: 999px;
-      border: 1px solid #cbd5e1;
-      text-align: center;
-      padding: 0.25rem 0.5rem;
-      font-size: 0.9rem;
-    }
-
-    .task-meta {
-      line-height: 1.4;
-    }
-
-    .gantt-card {
-      margin-top: 2rem;
-      background: white;
-      border-radius: var(--card-radius);
-      border: 1px solid var(--border-light);
-      padding: 1rem;
-      overflow-x: auto;
-      box-shadow: var(--shadow-sm);
-    }
-
-    .gantt-card .card-header {
-      background: transparent;
-    }
-
-    #gantt {
-      min-width: 580px;
-    }
+    .gantt-card { margin-top: 2rem; background: white; border-radius: var(--card-radius); border: 1px solid var(--border-light); padding: 1rem; overflow-x: auto; box-shadow: var(--shadow-sm); }
+    .gantt-card .card-header { background: transparent; }
+    #gantt { min-width: 580px; }
 
     .fab-mobile {
-      position: fixed;
-      bottom: 22px;
-      right: 22px;
-      width: 56px;
-      height: 56px;
-      border-radius: 50%;
-      background: var(--accent-primary);
-      color: white;
-      border: none;
-      box-shadow: 0 10px 20px rgba(59,130,246,0.35);
-      z-index: 1050;
-      display: none;
-      align-items: center;
-      justify-content: center;
+      position: fixed; bottom: 22px; right: 22px; width: 56px; height: 56px; border-radius: 50%; background: var(--accent-primary); color: white;
+      border: none; box-shadow: 0 10px 20px rgba(59,130,246,0.35); z-index: 1050; display: none; align-items: center; justify-content: center;
     }
-
-    .mobile-overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(15,23,42,0.38);
-      z-index: 1040;
-      backdrop-filter: blur(2px);
-      display: none;
-    }
-
-    .mobile-overlay.active {
-      display: block;
-    }
-
-    .toast-notification {
-      position: fixed;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 1100;
-      min-width: 260px;
-      max-width: calc(100vw - 2rem);
-    }
+    .mobile-overlay { position: fixed; inset: 0; background: rgba(15,23,42,0.38); z-index: 1040; backdrop-filter: blur(2px); display: none; }
+    .mobile-overlay.active { display: block; }
+    .toast-notification { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 1100; min-width: 260px; max-width: calc(100vw - 2rem); }
 
     .empty-state {
-      text-align: center;
-      padding: 3rem 1.5rem;
-      background: white;
-      border-radius: var(--card-radius);
-      border: 1px solid var(--border-light);
-      margin: 1.5rem 0;
-      box-shadow: var(--shadow-sm);
+      text-align: center; padding: 3rem 1.5rem; background: white; border-radius: var(--card-radius); border: 1px solid var(--border-light);
+      margin: 1.5rem 0; box-shadow: var(--shadow-sm);
     }
-
-    .empty-state i {
-      font-size: 4rem;
-      color: #cbd5e1;
-      margin-bottom: 1rem;
-    }
-
-    .empty-state h5 {
-      font-weight: 700;
-      margin-bottom: 0.5rem;
-    }
-
-    .empty-state p {
-      margin-bottom: 0.9rem;
-    }
+    .empty-state i { font-size: 4rem; color: #cbd5e1; margin-bottom: 1rem; }
+    .empty-state h5 { font-weight: 700; margin-bottom: 0.5rem; }
+    .empty-state p { margin-bottom: 0.9rem; }
 
     .upload-area {
-      border: 2px dashed #cbd5e1;
-      padding: 1rem;
-      text-align: center;
-      border-radius: 0.85rem;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      background: #fafcff;
-      min-width: 0;
+      border: 2px dashed #cbd5e1; padding: 1rem; text-align: center; border-radius: 0.85rem; cursor: pointer; transition: all 0.2s ease; background: #fafcff; min-width: 0;
     }
+    .upload-area:hover { border-color: var(--accent-primary); background: var(--accent-soft); }
+    .media-thumb { width: 100%; height: 120px; object-fit: cover; border-radius: 0.5rem; cursor: pointer; }
+    .file-preview-item { position: relative; }
+    .modal-body { word-break: break-word; }
 
-    .upload-area:hover {
-      border-color: var(--accent-primary);
-      background: var(--accent-soft);
-    }
-
-    .media-thumb {
-      width: 100%;
-      height: 120px;
-      object-fit: cover;
-      border-radius: 0.5rem;
-      cursor: pointer;
-    }
-
-    .file-preview-item {
-      position: relative;
-    }
-
-    .modal-body {
-      word-break: break-word;
-    }
-
-    /* Report Modal custom styles */
-    .report-modal-content {
-      max-height: 85vh;
-      overflow-y: auto;
-    }
-    .report-header {
-      background: linear-gradient(135deg, #f8fafc, #ffffff);
-      border-bottom: 2px solid var(--accent-soft);
-    }
-    .report-stat-badge {
-      background: #f1f5f9;
-      border-radius: 20px;
-      padding: 6px 14px;
-    }
+    .report-modal-content { max-height: 85vh; overflow-y: auto; }
+    .report-header { background: linear-gradient(135deg, #f8fafc, #ffffff); border-bottom: 2px solid var(--accent-soft); }
+    .report-stat-badge { background: #f1f5f9; border-radius: 20px; padding: 6px 14px; }
 
     @media (max-width: 991.98px) {
-      .sidebar {
-        transform: translateX(-100%);
-        box-shadow: 2px 0 20px rgba(0,0,0,0.10);
-      }
-
-      .sidebar.mobile-open {
-        transform: translateX(0);
-      }
-
-      .main-content {
-        margin-left: 0;
-      }
-
-      .fab-mobile {
-        display: inline-flex;
-      }
+      .sidebar { transform: translateX(-100%); box-shadow: 2px 0 20px rgba(0,0,0,0.10); }
+      .sidebar.mobile-open { transform: translateX(0); }
+      .main-content { margin-left: 0; }
+      .fab-mobile { display: inline-flex; }
     }
 
     @media (max-width: 767.98px) {
-      .top-bar {
-        padding: 0.75rem 0.9rem;
-      }
-
-      .search-wrapper {
-        width: 100%;
-      }
-
-      .top-bar-left,
-      .top-bar-right {
-        width: 100%;
-      }
-
-      .top-bar-right {
-        justify-content: space-between;
-      }
-
-      .projects-grid {
-        grid-template-columns: 1fr;
-      }
-
-      .project-header {
-        padding: 0.95rem;
-      }
-
-      .project-actions {
-        gap: 8px;
-      }
-
-      .project-action-btn {
-        flex: 1 1 auto;
-        justify-content: center;
-      }
-
-      .task-progress {
-        flex-direction: column;
-        align-items: stretch;
-      }
-
-      .task-progress-input {
-        width: 100%;
-      }
-
-      .gantt-card {
-        padding: 0.9rem;
-      }
-
-      #gantt {
-        min-width: 640px;
-      }
+      .top-bar { padding: 0.75rem 0.9rem; }
+      .search-wrapper { width: 100%; }
+      .top-bar-left, .top-bar-right { width: 100%; }
+      .top-bar-right { justify-content: space-between; }
+      .projects-grid { grid-template-columns: 1fr; }
+      .project-header { padding: 0.95rem; }
+      .project-actions { gap: 8px; }
+      .project-action-btn { flex: 1 1 auto; justify-content: center; }
+      .task-progress { flex-direction: column; align-items: stretch; }
+      .task-progress-input { width: 100%; }
+      .gantt-card { padding: 0.9rem; }
+      #gantt { min-width: 640px; }
+      .user-info { font-size: 0.8rem; padding: 0.4rem 0.8rem; }
+      .user-name { max-width: 100px; }
+      .login-btn-custom { padding: 0.4rem 1rem; font-size: 0.85rem; }
+      .logout-btn { padding: 0.35rem 0.8rem; font-size: 0.8rem; }
     }
 
     @media (max-width: 575.98px) {
-      .stats-grid {
-        grid-template-columns: 1fr 1fr;
-      }
-
-      .stat-card {
-        padding: 0.9rem;
-      }
-
-      .project-title {
-        flex-direction: column;
-      }
-
-      .progress-badge {
-        align-self: flex-start;
-      }
+      .stats-grid { grid-template-columns: 1fr 1fr; }
+      .stat-card { padding: 0.9rem; }
+      .project-title { flex-direction: column; }
+      .progress-badge { align-self: flex-start; }
+      .info-text { display: none; }
     }
 
     @media (prefers-reduced-motion: reduce) {
-      * {
-        scroll-behavior: auto !important;
-        animation-duration: 0.01ms !important;
-        animation-iteration-count: 1 !important;
-        transition-duration: 0.01ms !important;
-      }
+      * { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
     }
   </style>
 </head>
@@ -643,6 +283,22 @@
           <i class="bi bi-speedometer2"></i><span>Dashboard</span>
         </a>
       </div>
+
+      {% if session.get('user_role') == 'admin' or session.get('is_admin') %}
+      <div class="nav-item">
+        <a href="{{ url_for('register') }}" class="nav-link-custom">
+          <i class="bi bi-person-plus"></i><span>Register Users</span>
+        </a>
+      </div>
+      {% endif %}
+
+      {% if session.get('user_id') or session.get('member_id') %}
+      <div class="nav-item">
+        <a href="{{ url_for('logout') }}" class="nav-link-custom text-danger">
+          <i class="bi bi-box-arrow-right"></i><span>Logout</span>
+        </a>
+      </div>
+      {% endif %}
     </div>
   </aside>
 
@@ -668,18 +324,34 @@
           <i class="bi bi-plus-lg"></i> New Project
         </button>
 
-        <div class="dropdown">
-          <div class="rounded-circle bg-primary bg-opacity-10 d-flex align-items-center justify-content-center"
-               style="width: 40px; height: 40px; cursor: pointer;"
-               data-bs-toggle="dropdown" aria-expanded="false">
-            <i class="bi bi-person-circle fs-4 text-primary"></i>
+        {% if session.get('user_id') or session.get('member_id') %}
+          <div class="user-info">
+            <i class="bi bi-person-circle"></i>
+            <span class="user-name">
+              Welcome, {{ session.get('user_name', session.get('member_name', 'User')) }}
+              {% if session.get('user_role') == 'admin' or session.get('is_admin') %}
+                <span class="admin-badge">Admin</span>
+              {% endif %}
+            </span>
+
+            {% if session.get('user_role') == 'admin' or session.get('is_admin') %}
+              <a href="{{ url_for('register') }}" class="login-btn-custom" style="background:#10b981; box-shadow:none; padding:0.35rem 0.9rem;">
+                <i class="bi bi-person-plus"></i> Register
+              </a>
+            {% endif %}
+
+            <a href="{{ url_for('logout') }}" class="logout-btn">
+              <i class="bi bi-box-arrow-right"></i> Logout
+            </a>
           </div>
-          <ul class="dropdown-menu dropdown-menu-end shadow border-0">
-            <li><span class="dropdown-item-text"><i class="bi bi-person me-2"></i>Project Manager</span></li>
-            <li><hr class="dropdown-divider"></li>
-            <li><a class="dropdown-item" href="#" id="dropdownLogout"><i class="bi bi-box-arrow-right me-2"></i>Sign out</a></li>
-          </ul>
-        </div>
+        {% else %}
+          <div class="login-prompt">
+            <a href="{{ url_for('login') }}" class="login-btn-custom">
+              <i class="bi bi-box-arrow-in-right"></i> Login
+            </a>
+            <span class="info-text d-none d-md-inline">Sign in with admin-created details to access projects</span>
+          </div>
+        {% endif %}
       </div>
     </div>
 
@@ -731,7 +403,7 @@
   </main>
 </div>
 
-<!-- MODALS (standard + report modal built-in) -->
+<!-- MODALS -->
 <div class="modal fade" id="addProjectModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
     <div class="modal-content border-0 shadow">
@@ -838,9 +510,23 @@
   </div>
 </div>
 
-<div class="modal fade" id="inviteModal" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-dialog-centered"><div class="modal-content border-0 shadow"><div class="modal-header bg-light"><h5 class="modal-title">Invite Members</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><p>Invite to <strong id="inviteProjName"></strong></p><textarea class="form-control" rows="3" placeholder="Emails (comma separated)"></textarea><small class="text-muted mt-2 d-block">Invitation emails would be sent in production</small></div><div class="modal-footer"><button class="btn btn-primary" data-bs-dismiss="modal">Send Invites</button></div></div></div></div>
+<div class="modal fade" id="inviteModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header bg-light">
+        <h5 class="modal-title">Invite Members</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p>Invite to <strong id="inviteProjName"></strong></p>
+        <textarea class="form-control" rows="3" placeholder="Emails (comma separated)"></textarea>
+        <small class="text-muted mt-2 d-block">Invitation emails would be sent in production</small>
+      </div>
+      <div class="modal-footer"><button class="btn btn-primary" data-bs-dismiss="modal">Send Invites</button></div>
+    </div>
+  </div>
+</div>
 
-<!-- BUILT-IN REPORT MODAL: replaces missing report.html -->
 <div class="modal fade" id="reportModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
     <div class="modal-content border-0 shadow report-modal-content">
@@ -848,9 +534,7 @@
         <h5 class="modal-title fw-bold"><i class="bi bi-file-text-fill text-info me-2"></i>Project Report</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
-      <div class="modal-body" id="reportModalBody">
-        <!-- dynamic report content loaded via JS -->
-      </div>
+      <div class="modal-body" id="reportModalBody"></div>
       <div class="modal-footer bg-light">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
         <button type="button" class="btn btn-primary" id="printReportBtn"><i class="bi bi-printer"></i> Print / Save PDF</button>
@@ -859,11 +543,19 @@
   </div>
 </div>
 
-<div class="modal fade" id="mediaViewerModal" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-lg modal-dialog-centered"><div class="modal-content bg-dark text-white"><div class="modal-header border-0"><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body text-center" id="mediaViewerContent"></div></div></div></div>
+<div class="modal fade" id="mediaViewerModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content bg-dark text-white">
+      <div class="modal-header border-0">
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body text-center" id="mediaViewerContent"></div>
+    </div>
+  </div>
+</div>
 
 <button class="fab-mobile" id="mobileFab" data-bs-toggle="modal" data-bs-target="#addProjectModal" aria-label="Add project"><i class="bi bi-plus-lg fs-4"></i></button>
 
-<!-- SCRIPTS -->
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/frappe-gantt/0.5.0/frappe-gantt.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
@@ -872,12 +564,24 @@
   let projectsData = [];
 
   function saveToLocalStorage() { localStorage.setItem('flowtrack_projects_active', JSON.stringify(projectsData)); }
-  function loadFromLocalStorage() { const saved = localStorage.getItem('flowtrack_projects_active'); if (saved) { try { projectsData = JSON.parse(saved); } catch(e) { projectsData = []; } } else { projectsData = []; } }
-  function updateStats() { let total = projectsData.length; let avgComp = total ? Math.round(projectsData.reduce((acc, p) => acc + (p.completion || 0), 0) / total) : 0; let onTrack = projectsData.filter(p => (p.completion || 0) >= 75).length; document.getElementById('statProjects').innerText = total; document.getElementById('statCompletion').innerText = avgComp + "%"; document.getElementById('statOntrack').innerText = onTrack; }
-  function recalcProjectCompletion(project) { if (!project.tasks || project.tasks.length === 0) project.completion = 0; else { const totalProgress = project.tasks.reduce((sum, t) => sum + (t.progress || 0), 0); project.completion = Math.round(totalProgress / project.tasks.length); } }
+  function loadFromLocalStorage() {
+    const saved = localStorage.getItem('flowtrack_projects_active');
+    if (saved) { try { projectsData = JSON.parse(saved); } catch(e) { projectsData = []; } } else { projectsData = []; }
+  }
+  function updateStats() {
+    let total = projectsData.length;
+    let avgComp = total ? Math.round(projectsData.reduce((acc, p) => acc + (p.completion || 0), 0) / total) : 0;
+    let onTrack = projectsData.filter(p => (p.completion || 0) >= 75).length;
+    document.getElementById('statProjects').innerText = total;
+    document.getElementById('statCompletion').innerText = avgComp + "%";
+    document.getElementById('statOntrack').innerText = onTrack;
+  }
+  function recalcProjectCompletion(project) {
+    if (!project.tasks || project.tasks.length === 0) project.completion = 0;
+    else { const totalProgress = project.tasks.reduce((sum, t) => sum + (t.progress || 0), 0); project.completion = Math.round(totalProgress / project.tasks.length); }
+  }
   function escapeHtml(str) { if (!str) return ''; return String(str).replace(/[&<>]/g, function(m) { if (m === '&') return '&amp;'; if (m === '<') return '&lt;'; if (m === '>') return '&gt;'; return m; }); }
 
-  // NEW: generate report inside modal (no external file)
   function openReport(projectId) {
     const project = projectsData.find(p => p.id === projectId);
     if (!project) { showToast("Project not found", "danger"); return; }
@@ -885,7 +589,7 @@
     const totalTasks = tasks.length;
     const completedTasks = tasks.filter(t => (t.progress || 0) >= 100).length;
     const avgTaskProgress = totalTasks ? Math.round(tasks.reduce((sum, t) => sum + (t.progress || 0), 0) / totalTasks) : 0;
-    
+
     let tasksHtml = '';
     if (totalTasks === 0) tasksHtml = '<tr><td colspan="4" class="text-center text-muted">No tasks added yet.</td></tr>';
     else {
@@ -898,7 +602,7 @@
         </tr>`;
       });
     }
-    
+
     const reportHTML = `
       <div class="container-fluid">
         <div class="row mb-4">
@@ -937,7 +641,7 @@
     document.getElementById('printReportBtn').onclick = () => { window.print(); };
   }
 
-  function openEditTaskModal(projectId, taskId) { 
+  function openEditTaskModal(projectId, taskId) {
     const project = projectsData.find(p => p.id === projectId);
     if (!project) return;
     const task = project.tasks.find(t => t.id === taskId);
@@ -962,12 +666,68 @@
     new bootstrap.Modal(document.getElementById('editTaskModal')).show();
   }
 
-  function saveTaskEdit(event) { event.preventDefault(); const taskId = parseInt(document.getElementById('editTaskId').value); const projectId = parseInt(document.getElementById('editTaskProjectId').value); const newName = document.getElementById('editTaskName').value.trim(); const newProgress = parseInt(document.getElementById('editTaskProgress').value); const newStartDate = document.getElementById('editTaskStartDate').value; const newEndDate = document.getElementById('editTaskEndDate').value; const imageFiles = document.getElementById('modalImageInput').files; const videoFiles = document.getElementById('modalVideoInput').files; if (!newName) { showToast("Task name required", "danger"); return; } const project = projectsData.find(p => p.id === projectId); if (project) { const task = project.tasks.find(t => t.id === taskId); if (task) { task.name = newName; task.progress = Math.min(100, Math.max(0, newProgress)); task.start_date = newStartDate; task.end_date = newEndDate; if (imageFiles.length > 0) { if (!task.media) task.media = []; Array.from(imageFiles).forEach(file => { const reader = new FileReader(); reader.onload = function(e) { task.media.push({ id: Date.now() + Math.random(), name: file.name, type: 'image', url: e.target.result }); saveToLocalStorage(); renderProjects(document.getElementById('globalSearch')?.value || ''); }; reader.readAsDataURL(file); }); } if (videoFiles.length > 0) { if (!task.media) task.media = []; Array.from(videoFiles).forEach(file => { const reader = new FileReader(); reader.onload = function(e) { task.media.push({ id: Date.now() + Math.random(), name: file.name, type: 'video', url: e.target.result }); saveToLocalStorage(); renderProjects(document.getElementById('globalSearch')?.value || ''); }; reader.readAsDataURL(file); }); } recalcProjectCompletion(project); saveToLocalStorage(); renderProjects(document.getElementById('globalSearch')?.value || ''); setTimeout(() => { bootstrap.Modal.getInstance(document.getElementById('editTaskModal')).hide(); showToast(`Task "${newName}" updated`, "success"); }, 450); } } }
+  function saveTaskEdit(event) {
+    event.preventDefault();
+    const taskId = parseInt(document.getElementById('editTaskId').value);
+    const projectId = parseInt(document.getElementById('editTaskProjectId').value);
+    const newName = document.getElementById('editTaskName').value.trim();
+    const newProgress = parseInt(document.getElementById('editTaskProgress').value);
+    const newStartDate = document.getElementById('editTaskStartDate').value;
+    const newEndDate = document.getElementById('editTaskEndDate').value;
+    const imageFiles = document.getElementById('modalImageInput').files;
+    const videoFiles = document.getElementById('modalVideoInput').files;
+    if (!newName) { showToast("Task name required", "danger"); return; }
+    const project = projectsData.find(p => p.id === projectId);
+    if (project) {
+      const task = project.tasks.find(t => t.id === taskId);
+      if (task) {
+        task.name = newName;
+        task.progress = Math.min(100, Math.max(0, newProgress));
+        task.start_date = newStartDate;
+        task.end_date = newEndDate;
+        if (imageFiles.length > 0) {
+          if (!task.media) task.media = [];
+          Array.from(imageFiles).forEach(file => {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+              task.media.push({ id: Date.now() + Math.random(), name: file.name, type: 'image', url: e.target.result });
+              saveToLocalStorage();
+              renderProjects(document.getElementById('globalSearch')?.value || '');
+            };
+            reader.readAsDataURL(file);
+          });
+        }
+        if (videoFiles.length > 0) {
+          if (!task.media) task.media = [];
+          Array.from(videoFiles).forEach(file => {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+              task.media.push({ id: Date.now() + Math.random(), name: file.name, type: 'video', url: e.target.result });
+              saveToLocalStorage();
+              renderProjects(document.getElementById('globalSearch')?.value || '');
+            };
+            reader.readAsDataURL(file);
+          });
+        }
+        recalcProjectCompletion(project);
+        saveToLocalStorage();
+        renderProjects(document.getElementById('globalSearch')?.value || '');
+        setTimeout(() => {
+          bootstrap.Modal.getInstance(document.getElementById('editTaskModal')).hide();
+          showToast(`Task "${newName}" updated`, "success");
+        }, 450);
+      }
+    }
+  }
 
-  function renderProjects(filterText = "") { 
+  function renderProjects(filterText = "") {
     const container = document.getElementById('projectsContainer'); if (!container) return;
     let filtered = projectsData.filter(p => p.name.toLowerCase().includes(filterText.toLowerCase()) || (p.tasks || []).some(t => t.name.toLowerCase().includes(filterText.toLowerCase())));
-    if (filtered.length === 0) { container.innerHTML = `<div class="empty-state"><i class="bi bi-folder-plus"></i><h5>No projects yet</h5><p class="text-muted">Get started by creating your first project</p><button class="btn btn-primary mt-2 create-project-empty-btn">Create Project</button></div>`; const emptyBtn = container.querySelector('.create-project-empty-btn'); if (emptyBtn) emptyBtn.addEventListener('click', (e) => { e.preventDefault(); new bootstrap.Modal(document.getElementById('addProjectModal')).show(); }); updateStats(); renderGanttChart(); return; }
+    if (filtered.length === 0) {
+      container.innerHTML = `<div class="empty-state"><i class="bi bi-folder-plus"></i><h5>No projects yet</h5><p class="text-muted">Get started by creating your first project</p><button class="btn btn-primary mt-2 create-project-empty-btn">Create Project</button></div>`;
+      const emptyBtn = container.querySelector('.create-project-empty-btn'); if (emptyBtn) emptyBtn.addEventListener('click', (e) => { e.preventDefault(); new bootstrap.Modal(document.getElementById('addProjectModal')).show(); });
+      updateStats(); renderGanttChart(); return;
+    }
     let html = '';
     filtered.forEach(proj => {
       let tasksHtml = ''; (proj.tasks || []).forEach(task => { const hasMedia = task.media && task.media.length > 0; const mediaBadge = hasMedia ? `<span class="badge bg-info ms-2" style="font-size: 10px;"><i class="bi bi-paperclip"></i> ${task.media.length}</span>` : ''; tasksHtml += `<div class="task-item"><div class="d-flex justify-content-between align-items-start gap-2"><div class="flex-grow-1"><strong class="task-name">${escapeHtml(task.name)}</strong>${mediaBadge}</div><div class="d-flex gap-2"><button class="btn btn-sm btn-outline-warning edit-task-btn" onclick="openEditTaskModal(${proj.id}, ${task.id})"><i class="bi bi-pencil-square"></i> Edit</button><button class="btn btn-sm btn-outline-danger delete-task-btn" data-taskid="${task.id}" data-projid="${proj.id}"><i class="bi bi-trash"></i></button></div></div><div class="task-progress mt-2"><div class="flex-grow-1"><div class="progress" style="height:6px"><div class="progress-bar bg-success" style="width:${task.progress || 0}%"></div></div></div><input type="number" class="task-progress-input" value="${task.progress || 0}" min="0" max="100" step="1" data-taskid="${task.id}"><button class="btn btn-sm btn-success update-progress-btn" data-id="${task.id}">✓ Update</button></div><div class="task-meta mt-2"><small class="text-muted"><i class="bi bi-calendar-range"></i> ${task.start_date || 'No start date'} → ${task.end_date || 'No end date'}</small></div>${hasMedia ? `<div class="mt-2"><small class="text-primary"><i class="bi bi-images"></i> ${task.media.length} media file(s) attached</small></div>` : ''}</div>`; });
@@ -977,7 +737,7 @@
     attachProjectEventListeners(); attachProgressEvents(); updateStats(); renderGanttChart();
   }
 
-  function attachProjectEventListeners() { 
+  function attachProjectEventListeners() {
     document.querySelectorAll('.edit-project-btn').forEach(btn => { btn.onclick = () => { const id = parseInt(btn.dataset.id); const proj = projectsData.find(p => p.id === id); if(proj){ document.getElementById('editProjectId').value = id; document.getElementById('editName').value = proj.name; document.getElementById('editType').value = proj.type || 'Road Construction'; document.getElementById('editStart').value = proj.start_date || ''; document.getElementById('editEnd').value = proj.end_date || ''; new bootstrap.Modal(document.getElementById('editProjectModal')).show(); } }; });
     document.querySelectorAll('.delete-project-btn').forEach(btn => { btn.onclick = () => { if(confirm("Delete project permanently?")){ const id = parseInt(btn.dataset.id); projectsData = projectsData.filter(p => p.id !== id); saveToLocalStorage(); renderProjects(document.getElementById('globalSearch')?.value || ''); showToast("Project deleted", "danger"); } }; });
     document.querySelectorAll('.invite-project-btn').forEach(btn => { btn.onclick = () => { document.getElementById('inviteProjName').innerText = btn.dataset.name; new bootstrap.Modal(document.getElementById('inviteModal')).show(); }; });
@@ -986,19 +746,45 @@
     document.querySelectorAll('.report-btn').forEach(btn => { btn.onclick = (e) => { e.preventDefault(); const projectId = parseInt(btn.dataset.reportId); openReport(projectId); }; });
   }
 
-  function attachProgressEvents() { document.querySelectorAll('.update-progress-btn').forEach(btn => { btn.onclick = () => { const taskId = parseInt(btn.dataset.id); const input = btn.parentElement.querySelector('.task-progress-input'); let newVal = parseInt(input.value); if (isNaN(newVal)) newVal = 0; newVal = Math.min(100, Math.max(0, newVal)); for (let p of projectsData) { let task = (p.tasks || []).find(t => t.id === taskId); if (task) { task.progress = newVal; recalcProjectCompletion(p); break; } } saveToLocalStorage(); renderProjects(document.getElementById('globalSearch')?.value || ''); showToast(`Progress updated to ${newVal}%`, "success"); }; }); }
+  function attachProgressEvents() {
+    document.querySelectorAll('.update-progress-btn').forEach(btn => { btn.onclick = () => { const taskId = parseInt(btn.dataset.id); const input = btn.parentElement.querySelector('.task-progress-input'); let newVal = parseInt(input.value); if (isNaN(newVal)) newVal = 0; newVal = Math.min(100, Math.max(0, newVal)); for (let p of projectsData) { let task = (p.tasks || []).find(t => t.id === taskId); if (task) { task.progress = newVal; recalcProjectCompletion(p); break; } } saveToLocalStorage(); renderProjects(document.getElementById('globalSearch')?.value || ''); showToast(`Progress updated to ${newVal}%`, "success"); }; });
+  }
 
-  function renderGanttChart() { let tasksForGantt = []; projectsData.forEach(proj => { (proj.tasks || []).forEach(task => { if (task.start_date && task.end_date) { tasksForGantt.push({ id: task.id.toString(), name: task.name, start: task.start_date, end: task.end_date, progress: (task.progress || 0) / 100 }); } }); }); const container = document.getElementById("gantt"); if (!container) return; container.innerHTML = ''; if (tasksForGantt.length === 0) { container.innerHTML = '<div class="alert alert-light text-center p-4 mb-0"><i class="bi bi-info-circle fs-3"></i><p class="mt-2 mb-0">Add tasks with dates to see Gantt timeline</p></div>'; return; } try { new Gantt("#gantt", tasksForGantt, { on_date_change: (task, start, end) => { let tid = parseInt(task.id); for (let p of projectsData) { let t = (p.tasks || []).find(ts => ts.id === tid); if (t) { t.start_date = start.toISOString().slice(0,10); t.end_date = end.toISOString().slice(0,10); saveToLocalStorage(); showToast("Task dates updated", "success"); renderProjects(document.getElementById('globalSearch')?.value || ''); break; } } }, on_progress_change: (task, prog) => { let tid = parseInt(task.id); for (let p of projectsData) { let t = (p.tasks || []).find(ts => ts.id === tid); if (t) { t.progress = Math.round(prog * 100); recalcProjectCompletion(p); saveToLocalStorage(); renderProjects(document.getElementById('globalSearch')?.value || ''); break; } } } }); } catch(e) { container.innerHTML = '<div class="alert alert-danger mb-0">Unable to load Gantt chart.</div>'; } }
+  function renderGanttChart() {
+    let tasksForGantt = [];
+    projectsData.forEach(proj => { (proj.tasks || []).forEach(task => { if (task.start_date && task.end_date) { tasksForGantt.push({ id: task.id.toString(), name: task.name, start: task.start_date, end: task.end_date, progress: (task.progress || 0) / 100 }); } }); });
+    const container = document.getElementById("gantt"); if (!container) return; container.innerHTML = '';
+    if (tasksForGantt.length === 0) { container.innerHTML = '<div class="alert alert-light text-center p-4 mb-0"><i class="bi bi-info-circle fs-3"></i><p class="mt-2 mb-0">Add tasks with dates to see Gantt timeline</p></div>'; return; }
+    try {
+      new Gantt("#gantt", tasksForGantt, {
+        on_date_change: (task, start, end) => { let tid = parseInt(task.id); for (let p of projectsData) { let t = (p.tasks || []).find(ts => ts.id === tid); if (t) { t.start_date = start.toISOString().slice(0,10); t.end_date = end.toISOString().slice(0,10); saveToLocalStorage(); showToast("Task dates updated", "success"); renderProjects(document.getElementById('globalSearch')?.value || ''); break; } } },
+        on_progress_change: (task, prog) => { let tid = parseInt(task.id); for (let p of projectsData) { let t = (p.tasks || []).find(ts => ts.id === tid); if (t) { t.progress = Math.round(prog * 100); recalcProjectCompletion(p); saveToLocalStorage(); renderProjects(document.getElementById('globalSearch')?.value || ''); break; } } }
+      });
+    } catch(e) { container.innerHTML = '<div class="alert alert-danger mb-0">Unable to load Gantt chart.</div>'; }
+  }
 
-  function showToast(msg, type='success') { let toastDiv = document.createElement('div'); toastDiv.className = 'toast-notification'; const bgColor = type === 'success' ? 'bg-success' : (type === 'danger' ? 'bg-danger' : 'bg-info'); toastDiv.innerHTML = `<div class="toast align-items-center text-white ${bgColor} border-0 show" role="alert"><div class="d-flex"><div class="toast-body">${msg}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div></div>`; document.body.appendChild(toastDiv); setTimeout(() => toastDiv.remove(), 3000); }
+  function showToast(msg, type='success') {
+    let toastDiv = document.createElement('div'); toastDiv.className = 'toast-notification';
+    const bgColor = type === 'success' ? 'bg-success' : (type === 'danger' ? 'bg-danger' : 'bg-info');
+    toastDiv.innerHTML = `<div class="toast align-items-center text-white ${bgColor} border-0 show" role="alert"><div class="d-flex"><div class="toast-body">${msg}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div></div>`;
+    document.body.appendChild(toastDiv);
+    setTimeout(() => toastDiv.remove(), 3000);
+  }
 
-  document.getElementById('addProjectForm')?.addEventListener('submit', (e) => { e.preventDefault(); let newId = projectsData.length ? Math.max(...projectsData.map(p => p.id)) + 1 : 1; let selectedTypeElem = document.getElementById('projType'); let selectedTypeText = selectedTypeElem.options[selectedTypeElem.selectedIndex]?.text || 'General'; let newProj = { id: newId, name: document.getElementById('projName').value, type: selectedTypeText, start_date: document.getElementById('projStart').value, end_date: document.getElementById('projEnd').value, completion: 0, tasks: [] }; if (!newProj.name) { showToast("Project name required", "danger"); return; } projectsData.push(newProj); saveToLocalStorage(); renderProjects(document.getElementById('globalSearch')?.value || ''); bootstrap.Modal.getInstance(document.getElementById('addProjectModal')).hide(); document.getElementById('addProjectForm').reset(); showToast(`Project "${newProj.name}" created`, "success"); });
+  document.getElementById('addProjectForm')?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    let newId = projectsData.length ? Math.max(...projectsData.map(p => p.id)) + 1 : 1;
+    let selectedTypeElem = document.getElementById('projType');
+    let selectedTypeText = selectedTypeElem.options[selectedTypeElem.selectedIndex]?.text || 'General';
+    let newProj = { id: newId, name: document.getElementById('projName').value, type: selectedTypeText, start_date: document.getElementById('projStart').value, end_date: document.getElementById('projEnd').value, completion: 0, tasks: [] };
+    if (!newProj.name) { showToast("Project name required", "danger"); return; }
+    projectsData.push(newProj); saveToLocalStorage(); renderProjects(document.getElementById('globalSearch')?.value || ''); bootstrap.Modal.getInstance(document.getElementById('addProjectModal')).hide(); document.getElementById('addProjectForm').reset(); showToast(`Project "${newProj.name}" created`, "success");
+  });
   document.getElementById('editProjectForm')?.addEventListener('submit', (e) => { e.preventDefault(); let id = parseInt(document.getElementById('editProjectId').value); let proj = projectsData.find(p => p.id === id); if (proj) { proj.name = document.getElementById('editName').value; proj.type = document.getElementById('editType').value; proj.start_date = document.getElementById('editStart').value; proj.end_date = document.getElementById('editEnd').value; saveToLocalStorage(); renderProjects(document.getElementById('globalSearch')?.value || ''); bootstrap.Modal.getInstance(document.getElementById('editProjectModal')).hide(); showToast("Project updated", "success"); } });
   document.getElementById('editTaskForm')?.addEventListener('submit', saveTaskEdit);
   document.getElementById('globalSearch')?.addEventListener('input', (e) => renderProjects(e.target.value));
   document.getElementById('mobileMenuToggle')?.addEventListener('click', () => { document.getElementById('sidebar').classList.toggle('mobile-open'); document.getElementById('mobileOverlay').classList.toggle('active'); });
   document.getElementById('mobileOverlay')?.addEventListener('click', () => { document.getElementById('sidebar').classList.remove('mobile-open'); document.getElementById('mobileOverlay').classList.remove('active'); });
-  document.getElementById('logoutLink')?.addEventListener('click', (e) => { e.preventDefault(); showToast("Logged out (demo)", "info"); });
   document.getElementById('dashboardLink')?.addEventListener('click', (e) => { e.preventDefault(); renderProjects(document.getElementById('globalSearch')?.value || ''); });
   function syncTaskProgress(value) { const slider = document.getElementById('editTaskProgressSlider'); const numberInput = document.getElementById('editTaskProgress'); if(slider && numberInput) { slider.value = value; numberInput.value = value; } }
   document.getElementById('editTaskProgressSlider')?.addEventListener('input', (e) => syncTaskProgress(e.target.value));

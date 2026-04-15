@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Register</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <style>
+        body {
+            font-family: Arial;
+            background: linear-gradient(135deg,#667eea,#764ba2);
+            display:flex;
+            justify-content:center;
+            align-items:center;
+            height:100vh;
+        }
+
+        .box {
+            background:white;
+            padding:30px;
+            border-radius:15px;
+            width:400px;
+        }
+
+        input, select {
+            width:100%;
+            padding:10px;
+            margin-top:8px;
+            margin-bottom:15px;
+        }
+
+        button {
+            width:100%;
+            padding:12px;
+            background:#667eea;
+            color:white;
+            border:none;
+            border-radius:8px;
+        }
+
+        .msg { margin-bottom:10px; }
+    </style>
+</head>
+
+<body>
+
+<div class="box">
+
+    <h2>Create Account</h2>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}
+            <div class="msg">{{ message }}</div>
+        {% endfor %}
+    {% endwith %}
+
+    <form method="POST" action="{{ url_for('register') }}">
+
+        <label>Email</label>
+        <input type="email" name="email" required>
+
+        <label>Full Name</label>
+        <input type="text" name="name" required>
+
+        <label>Password</label>
+        <input type="password" name="password" required>
+
+        <!-- ✅ ROLE SELECTION ADDED -->
+        <label>Account Type</label>
+        <select name="role" required>
+            <option value="team_member">Team Member</option>
+            <option value="admin">Admin</option>
+        </select>
+
+        <button type="submit">Register</button>
+
+    </form>
+
+    <p style="text-align:center;margin-top:10px;">
+        <a href="{{ url_for('login') }}">Login instead</a>
+    </p>
+
+</div>
+
+</body>
+</html>
