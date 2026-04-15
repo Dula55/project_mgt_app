@@ -19,7 +19,7 @@ from flask_mail import Mail, Message
 from flask_migrate import Migrate
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
-from models import db, User
+from models import db, User, TeamMember, Project, Task, MediaFile
 
 try:
     from apscheduler.schedulers.background import BackgroundScheduler
@@ -42,16 +42,16 @@ threading.stack_size(1024 * 512)
 # ================= APP INIT =================
 app = Flask(__name__)
 
-# To share the same data across devices, use one shared database.
-# Set DATABASE_URL to PostgreSQL/MySQL on your server for best results.
+# Use a shared database (PostgreSQL/MySQL recommended for multi-device)
 app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", "sqlite:///projects.db")
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["UPLOAD_FOLDER"] = os.environ.get("UPLOAD_FOLDER", "static/uploads")
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", secrets.token_hex(32))
 app.config["MAX_CONTENT_LENGTH"] = 20 * 1024 * 1024
 app.config["SESSION_COOKIE_HTTPONLY"] = True
-app.config["SESSION_COOKIE_SECURE"] = True  # only if using HTTPS
+app.config["SESSION_COOKIE_SECURE"] = os.environ.get("SESSION_SECURE", "False").lower() == "true"
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)
 
 def str_to_bool(value):
     return str(value).strip().lower() in ("true", "1", "yes")
@@ -78,8 +78,6 @@ app.config["MAIL_DEFAULT_SENDER"] = MAIL_USERNAME or "noreply@projectmanagement.
 mail = Mail(app)
 
 # ================= MODELS =================
-from models import db, Project, Task, MediaFile, TeamMember, project_team
-
 db.init_app(app)
 migrate = Migrate(app, db)
 
@@ -124,6 +122,31 @@ def login_required(f):
             return redirect(url_for('login'))
         return f(*args, **kwargs)
     return decorated_function
+
+def get_current_team_member():
+    """Get or create TeamMember for the current logged-in User"""
+    user_id = session.get('user_id')
+    if not user_id:
+        return None
+    
+    user = User.query.get(user_id)
+    if not user:
+        return None
+    
+    # Check if user has a linked TeamMember
+    if user.team_member:
+        return user.team_member
+    
+    # Create TeamMember for this user
+    team_member = TeamMember(
+        name=user.name,
+        email=user.email,
+        user_id=user.id
+    )
+    db.session.add(team_member)
+    db.session.commit()
+    
+    return team_member
 
 def parse_date(value):
     if not value:
@@ -315,14 +338,15 @@ def test_email():
 @app.route("/")
 def index():
     try:
-        member_id = session.get("member_id")
-        if member_id:
-            member = TeamMember.query.get(member_id)
-            # Show projects the member is part of
-            projects = member.projects if member else []
+        # Get projects for the current user
+        team_member = get_current_team_member()
+        
+        if team_member:
+            # Show projects the user is part of (same across all devices)
+            projects = team_member.projects
         else:
-            # When not logged in, show all projects (read-only mode)
-            projects = Project.query.all()
+            # Not logged in - show public projects or empty
+            projects = Project.query.limit(10).all()
 
         for project in projects:
             for task in project.tasks:
@@ -336,13 +360,13 @@ def index():
 
 # ================= API (GOOD FOR MULTI-DEVICE ACCESS) =================
 @app.route("/api/projects")
+@login_required
 def api_projects():
-    member_id = session.get("member_id")
-    if member_id:
-        member = TeamMember.query.get(member_id)
-        projects = member.projects if member else []
+    team_member = get_current_team_member()
+    if team_member:
+        projects = team_member.projects
     else:
-        projects = Project.query.all()
+        projects = Project.query.limit(10).all()
     
     return jsonify({
         "success": True,
@@ -361,6 +385,7 @@ def api_projects():
     })
 
 @app.route("/api/projects", methods=["POST"])
+@login_required
 def api_create_project():
     data = request.get_json(force=True, silent=True) or request.form
     try:
@@ -378,13 +403,11 @@ def api_create_project():
         db.session.add(project)
         safe_commit()
         
-        # If user is logged in, automatically add them as a team member
-        member_id = session.get("member_id")
-        if member_id:
-            member = TeamMember.query.get(member_id)
-            if member and member not in project.team_members:
-                project.team_members.append(member)
-                safe_commit()
+        # Automatically add current user as a team member
+        team_member = get_current_team_member()
+        if team_member and team_member not in project.team_members:
+            project.team_members.append(team_member)
+            safe_commit()
 
         return jsonify({"success": True, "message": "Project created successfully", "project_id": project.id}), 201
     except Exception as e:
@@ -392,8 +415,14 @@ def api_create_project():
         return jsonify({"success": False, "message": str(e)}), 500
 
 @app.route("/api/projects/<int:project_id>/tasks")
+@login_required
 def api_project_tasks(project_id):
     project = Project.query.get_or_404(project_id)
+    # Verify user has access to this project
+    team_member = get_current_team_member()
+    if team_member not in project.team_members:
+        return jsonify({"success": False, "message": "Access denied"}), 403
+    
     tasks = Task.query.filter_by(project_id=project.id).order_by(Task.created_at.asc()).all()
     return jsonify({
         "success": True,
@@ -421,8 +450,14 @@ def api_project_tasks(project_id):
     })
 
 @app.route("/api/projects/<int:project_id>/tasks", methods=["POST"])
+@login_required
 def api_create_task(project_id):
     project = Project.query.get_or_404(project_id)
+    # Verify user has access to this project
+    team_member = get_current_team_member()
+    if team_member not in project.team_members:
+        return jsonify({"success": False, "message": "Access denied"}), 403
+    
     data = request.get_json(force=True, silent=True) or request.form
     try:
         name = data.get("name")
@@ -458,6 +493,7 @@ def api_create_task(project_id):
 
 # ================= PROJECT / TASK UI ROUTES =================
 @app.route("/add_project", methods=["POST"])
+@login_required
 def add_project():
     try:
         name = request.form["name"]
@@ -469,12 +505,10 @@ def add_project():
         db.session.add(project)
         db.session.flush()
         
-        # If user is logged in, automatically add them as a team member
-        member_id = session.get("member_id")
-        if member_id:
-            member = TeamMember.query.get(member_id)
-            if member and member not in project.team_members:
-                project.team_members.append(member)
+        # Automatically add current user as a team member
+        team_member = get_current_team_member()
+        if team_member and team_member not in project.team_members:
+            project.team_members.append(team_member)
 
         if project_type == "Road":
             phases, detailed = ROAD_PHASES, False
@@ -533,8 +567,14 @@ def add_project():
     return redirect(url_for("index"))
 
 @app.route("/edit_project/<int:project_id>", methods=["POST"])
+@login_required
 def edit_project(project_id):
     project = Project.query.get_or_404(project_id)
+    team_member = get_current_team_member()
+    if team_member not in project.team_members:
+        flash("Access denied", "error")
+        return redirect(url_for("index"))
+    
     try:
         project.name = request.form.get("name", project.name)
         project.project_type = request.form.get("type", project.project_type)
@@ -550,19 +590,38 @@ def edit_project(project_id):
     return redirect(url_for("index"))
 
 @app.route("/report/<int:project_id>")
+@login_required
 def report_view(project_id):
     project = Project.query.get_or_404(project_id)
+    team_member = get_current_team_member()
+    if team_member not in project.team_members:
+        flash("Access denied", "error")
+        return redirect(url_for("index"))
+    
     tasks, members = project_report_payload(project)
     return render_template("report.html", project=project, tasks=tasks, members=members)
 
 @app.route("/project_members/<int:project_id>")
+@login_required
 def project_members(project_id):
     project = Project.query.get_or_404(project_id)
+    team_member = get_current_team_member()
+    if team_member not in project.team_members:
+        flash("Access denied", "error")
+        return redirect(url_for("index"))
     return render_template("project_members.html", project=project)
 
 @app.route("/invite_members/<int:project_id>", methods=["POST"])
+@login_required
 def invite_members(project_id):
     project = Project.query.get_or_404(project_id)
+    team_member = get_current_team_member()
+    if team_member not in project.team_members:
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return jsonify({"success": False, "message": "Access denied"}), 403
+        flash("Access denied", "error")
+        return redirect(url_for("index"))
+    
     emails_input = request.form.get("emails", "")
     is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
 
@@ -640,29 +699,47 @@ def accept_invitation(token):
         flash("Invitation link has expired.", "error")
         return redirect(url_for("index"))
 
-    session["member_id"] = member.id
-    session["member_name"] = member.name
-    session["member_email"] = member.email
-    session.permanent = True
+    # Check if there's a User account with this email
+    user = User.query.filter_by(email=member.email).first()
+    if user:
+        # Link existing user
+        member.user_id = user.id
+        session['user_id'] = user.id
+        session['user_email'] = user.email
+    else:
+        # Create a new user account
+        flash("Please complete your registration to access the project.", "info")
+        return redirect(url_for('register_with_invite', email=member.email, token=token))
 
     member.invite_token = None
     member.token_expiry = None
     safe_commit()
 
-    flash(f"Welcome {member.name or member.email}!", "success")
+    session.permanent = True
+    flash(f"Welcome {member.name or member.email}! You now have access to the project.", "success")
     return redirect(url_for("index"))
+
+@app.route('/register_with_invite')
+def register_with_invite():
+    email = request.args.get('email')
+    token = request.args.get('token')
+    if not email or not token:
+        flash("Invalid invitation link", "error")
+        return redirect(url_for('login'))
+    return render_template('register.html', invite_email=email, invite_token=token)
 
 # ================= REGISTER/LOGIN/LOGOUT ROUTES =================
 @app.route('/register', methods=['GET', 'POST'])
 def register():
+    invite_email = request.args.get('email') or request.form.get('invite_email')
+    invite_token = request.args.get('token') or request.form.get('invite_token')
+    
     if request.method == 'POST':
-
         email = (request.form.get('email') or '').strip().lower()
         name = (request.form.get('name') or '').strip()
         password = request.form.get('password')
         role = request.form.get('role', 'team_member')
 
-        # validation
         if not email or not password or not name:
             flash("Email, name and password are required.", "error")
             return redirect(url_for('register'))
@@ -676,37 +753,55 @@ def register():
             user = User(
                 email=email,
                 name=name,
+                role=role,
                 password_hash=generate_password_hash(password),
             )
-
-            # store role if your model supports it
-            if hasattr(User, "role"):
-                user.role = role
-
             db.session.add(user)
+            db.session.flush()
+            
+            # Check if there's an existing TeamMember with this email
+            team_member = TeamMember.query.filter_by(email=email).first()
+            if team_member:
+                # Link existing TeamMember to this user
+                team_member.user_id = user.id
+                team_member.name = name
+            else:
+                # Create new TeamMember
+                team_member = TeamMember(
+                    name=name,
+                    email=email,
+                    user_id=user.id
+                )
+                db.session.add(team_member)
+            
+            # If coming from invitation, add to project
+            if invite_token:
+                invited_member = TeamMember.query.filter_by(invite_token=invite_token).first()
+                if invited_member and invited_member.email == email:
+                    # This member was already invited, link them
+                    invited_member.user_id = user.id
+                    invited_member.name = name
+                    # Clear invitation token
+                    invited_member.invite_token = None
+                    invited_member.token_expiry = None
+            
             db.session.commit()
-
-            # ✅ AUTO LOGIN
+            
+            # Auto login
             session.clear()
             session['user_id'] = user.id
             session['user_email'] = user.email
             session['user_role'] = role
 
             flash("Account created and logged in successfully!", "success")
-
-            # redirect based on role
-            if role == "admin":
-                return redirect(url_for("admin"))
-            else:
-                return redirect(url_for("index"))
+            return redirect(url_for("index"))
 
         except Exception as e:
             db.session.rollback()
             flash(f"Registration failed: {str(e)}", "error")
             return redirect(url_for('register'))
 
-    return render_template("register.html")
-
+    return render_template("register.html", invite_email=invite_email, invite_token=invite_token)
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -714,21 +809,35 @@ def login():
         email = request.form.get('email').strip().lower()
         password = request.form.get('password')
 
-        # Validate input
         if not email or not password:
             flash('Please enter both email and password.', 'error')
             return redirect(url_for('login'))
 
         user = User.query.filter_by(email=email).first()
 
-        # Check credentials
         if user and check_password_hash(user.password_hash, password):
+            session.clear()
             session['user_id'] = user.id
             session['user_email'] = user.email
+            session['user_role'] = user.role
+            session.permanent = True
+
+            # Ensure TeamMember exists and is linked
+            team_member = TeamMember.query.filter_by(email=email).first()
+            if not team_member:
+                team_member = TeamMember(
+                    name=user.name,
+                    email=user.email,
+                    user_id=user.id
+                )
+                db.session.add(team_member)
+                db.session.commit()
+            elif team_member.user_id != user.id:
+                team_member.user_id = user.id
+                db.session.commit()
 
             flash('Login successful!', 'success')
-            return redirect(url_for('index'))  # or dashboard
-
+            return redirect(url_for('index'))
         else:
             flash('Invalid email or password.', 'error')
             return redirect(url_for('login'))
@@ -741,20 +850,26 @@ def logout():
     flash('You have been logged out.', 'info')
     return redirect(url_for('login'))
 
-
 @app.route('/dashboard')
 @login_required
 def dashboard():
     return render_template('dashboard.html')
 
-
 @app.route("/admin", methods=["GET", "POST"])
 def admin():
     """Admin portal for managing team members"""
-    # Check if user is logged in and is admin
-    if not session.get("member_id") or not session.get("is_admin"):
-        flash("Access denied. Admin privileges required.", "error")
-        return redirect(url_for("index"))
+    admin_emails = os.environ.get("ADMIN_EMAILS", "").split(",")
+    admin_emails = [email.strip().lower() for email in admin_emails if email.strip()]
+    
+    user_id = session.get("user_id")
+    if user_id:
+        user = User.query.get(user_id)
+        if not user or user.email not in admin_emails:
+            flash("Access denied. Admin privileges required.", "error")
+            return redirect(url_for("index"))
+    else:
+        flash("Please login as admin.", "error")
+        return redirect(url_for("login"))
     
     if request.method == "POST":
         email = request.form.get("email", "").strip().lower()
@@ -764,18 +879,15 @@ def admin():
             flash("Both email and name are required", "error")
             return redirect(url_for("admin"))
         
-        # Validate email format
         if not re.match(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$", email):
             flash("Please enter a valid email address", "error")
             return redirect(url_for("admin"))
         
-        # Check if user already exists
         existing_member = TeamMember.query.filter_by(email=email).first()
         if existing_member:
             flash(f"User with email {email} already exists", "error")
             return redirect(url_for("admin"))
         
-        # Create new team member (not admin by default)
         new_member = TeamMember(email=email, name=name)
         db.session.add(new_member)
         safe_commit()
@@ -783,14 +895,10 @@ def admin():
         flash(f"Team member {name} ({email}) has been registered successfully!", "success")
         return redirect(url_for("admin"))
     
-    # GET request - show admin dashboard
     members = TeamMember.query.all()
     total_projects = Project.query.count()
     total_tasks = Task.query.count()
-    admin_emails = os.environ.get("ADMIN_EMAILS", "").split(",")
-    admin_emails = [email.strip().lower() for email in admin_emails if email.strip()]
     
-    # Prepare member list with admin status
     member_list = []
     for member in members:
         member_list.append({
@@ -798,7 +906,8 @@ def admin():
             "name": member.name,
             "email": member.email,
             "joined_at": member.joined_at,
-            "is_admin": member.email in admin_emails
+            "is_admin": member.email in admin_emails,
+            "has_user_account": member.user_id is not None
         })
     
     return render_template("admin.html", 
@@ -810,33 +919,33 @@ def admin():
 
 @app.route("/admin/delete_member/<int:member_id>", methods=["POST"])
 def delete_member(member_id):
-    """Delete a team member (admin only)"""
-    # Check if user is logged in and is admin
-    if not session.get("member_id") or not session.get("is_admin"):
-        flash("Access denied. Admin privileges required.", "error")
-        return redirect(url_for("index"))
-    
-    # Don't allow deleting yourself
-    if member_id == session.get("member_id"):
-        flash("You cannot delete your own account.", "error")
-        return redirect(url_for("admin"))
-    
-    member = TeamMember.query.get_or_404(member_id)
-    
-    # Check if member is admin (prevent deleting other admins)
     admin_emails = os.environ.get("ADMIN_EMAILS", "").split(",")
     admin_emails = [email.strip().lower() for email in admin_emails if email.strip()]
+    
+    user_id = session.get("user_id")
+    if user_id:
+        user = User.query.get(user_id)
+        if not user or user.email not in admin_emails:
+            flash("Access denied. Admin privileges required.", "error")
+            return redirect(url_for("index"))
+    else:
+        flash("Please login as admin.", "error")
+        return redirect(url_for("login"))
+    
+    member = TeamMember.query.get_or_404(member_id)
     
     if member.email in admin_emails:
         flash("Cannot delete other admin users.", "error")
         return redirect(url_for("admin"))
     
     try:
-        # Remove member from all projects
         for project in member.projects:
             project.team_members.remove(member)
         
-        # Delete the member
+        # Don't delete the User account if it exists, just unlink
+        if member.user_id:
+            member.user_id = None
+        
         db.session.delete(member)
         safe_commit()
         flash(f"Team member {member.name} ({member.email}) has been deleted.", "success")
@@ -846,10 +955,16 @@ def delete_member(member_id):
     
     return redirect(url_for("admin"))
 
-
 @app.route("/update_task/<int:task_id>", methods=["POST"])
+@login_required
 def update_task(task_id):
     task = Task.query.get_or_404(task_id)
+    project = Project.query.get(task.project_id)
+    team_member = get_current_team_member()
+    if team_member not in project.team_members:
+        flash("Access denied", "error")
+        return redirect(url_for("index"))
+    
     try:
         task.progress = float(request.form.get("progress", task.progress))
         if request.form.get("assigned_to_id"):
@@ -867,11 +982,14 @@ def update_task(task_id):
 
 @app.route("/edit_task/<int:task_id>", methods=["GET", "POST"], strict_slashes=False)
 @app.route("/edit_task/<int:task_id>/", methods=["GET", "POST"], strict_slashes=False)
+@login_required
 def edit_task(task_id):
     task = Task.query.get_or_404(task_id)
     project = Project.query.get(task.project_id)
-    if not project:
-        flash("Project not found", "error")
+    team_member = get_current_team_member()
+    
+    if not project or team_member not in project.team_members:
+        flash("Access denied", "error")
         return redirect(url_for("index"))
 
     if request.method == "POST":
@@ -945,8 +1063,15 @@ def edit_task(task_id):
     return render_template("edit_task.html", task=task, project=project, media_files=media_files)
 
 @app.route("/gantt_data")
+@login_required
 def gantt_data():
-    tasks = Task.query.all()
+    team_member = get_current_team_member()
+    if team_member:
+        project_ids = [p.id for p in team_member.projects]
+        tasks = Task.query.filter(Task.project_id.in_(project_ids)).all()
+    else:
+        tasks = Task.query.limit(50).all()
+    
     data = []
     for t in tasks:
         if t.start_date and t.end_date:
@@ -963,8 +1088,14 @@ def gantt_data():
     return jsonify(data)
 
 @app.route("/update_task_gantt/<int:task_id>", methods=["POST"])
+@login_required
 def update_task_gantt(task_id):
     task = Task.query.get_or_404(task_id)
+    project = Project.query.get(task.project_id)
+    team_member = get_current_team_member()
+    if team_member not in project.team_members:
+        return jsonify({"status": "error", "message": "Access denied"}), 403
+    
     data = request.get_json(force=True)
     try:
         if "start_date" in data and "end_date" in data:
@@ -986,7 +1117,13 @@ def update_task_gantt(task_id):
         return jsonify({"status": "error", "message": str(e)}), 400
 
 @app.route("/s_curve_data/<int:project_id>")
+@login_required
 def s_curve_data(project_id):
+    project = Project.query.get_or_404(project_id)
+    team_member = get_current_team_member()
+    if team_member not in project.team_members:
+        return jsonify({"error": "Access denied"}), 403
+    
     tasks = Task.query.filter_by(project_id=project_id).all()
     rows = []
     for t in tasks:
@@ -1005,8 +1142,13 @@ def s_curve_data(project_id):
     return jsonify(result)
 
 @app.route("/team_performance/<int:project_id>")
+@login_required
 def team_performance(project_id):
     project = Project.query.get_or_404(project_id)
+    team_member = get_current_team_member()
+    if team_member not in project.team_members:
+        return jsonify({"error": "Access denied"}), 403
+    
     tasks = Task.query.filter_by(project_id=project_id).all()
     result = []
     for member in project.team_members:
@@ -1027,8 +1169,17 @@ def team_performance(project_id):
 
 # ================= DELETE ROUTES =================
 @app.route("/delete_media/<int:media_id>")
+@login_required
 def delete_media(media_id):
     media = MediaFile.query.get_or_404(media_id)
+    task = Task.query.get(media.task_id)
+    if task:
+        project = Project.query.get(task.project_id)
+        team_member = get_current_team_member()
+        if team_member not in project.team_members:
+            flash("Access denied", "error")
+            return redirect(url_for("index"))
+    
     task_id = media.task_id
     try:
         if media.filepath and os.path.exists(media.filepath):
@@ -1042,8 +1193,15 @@ def delete_media(media_id):
     return redirect(url_for("edit_task", task_id=task_id))
 
 @app.route("/delete_task/<int:task_id>")
+@login_required
 def delete_task(task_id):
     task = Task.query.get_or_404(task_id)
+    project = Project.query.get(task.project_id)
+    team_member = get_current_team_member()
+    if team_member not in project.team_members:
+        flash("Access denied", "error")
+        return redirect(url_for("index"))
+    
     try:
         for media in MediaFile.query.filter_by(task_id=task_id).all():
             if media.filepath and os.path.exists(media.filepath):
@@ -1058,8 +1216,14 @@ def delete_task(task_id):
     return redirect(url_for("index"))
 
 @app.route("/delete_all_tasks/<int:project_id>")
+@login_required
 def delete_all_tasks(project_id):
-    Project.query.get_or_404(project_id)
+    project = Project.query.get_or_404(project_id)
+    team_member = get_current_team_member()
+    if team_member not in project.team_members:
+        flash("Access denied", "error")
+        return redirect(url_for("index"))
+    
     try:
         tasks = Task.query.filter_by(project_id=project_id).all()
         for task in tasks:
@@ -1076,8 +1240,14 @@ def delete_all_tasks(project_id):
     return redirect(url_for("index"))
 
 @app.route("/delete_project/<int:project_id>")
+@login_required
 def delete_project(project_id):
     project = Project.query.get_or_404(project_id)
+    team_member = get_current_team_member()
+    if team_member not in project.team_members:
+        flash("Access denied", "error")
+        return redirect(url_for("index"))
+    
     try:
         tasks = Task.query.filter_by(project_id=project.id).all()
         for task in tasks:
@@ -1096,8 +1266,14 @@ def delete_project(project_id):
 
 # ================= REPORT ROUTES =================
 @app.route("/project_report/<int:project_id>")
+@login_required
 def project_report(project_id):
     project = Project.query.get_or_404(project_id)
+    team_member = get_current_team_member()
+    if team_member not in project.team_members:
+        flash("Access denied", "error")
+        return redirect(url_for("index"))
+    
     tasks = Task.query.filter_by(project_id=project_id).all()
     doc = BytesIO()
     doc.write(f"{project.name} Report\n".encode())
@@ -1107,6 +1283,7 @@ def project_report(project_id):
     return send_file(doc, as_attachment=True, download_name=f"{project.name}_report.txt")
 
 @app.route("/generate_report/<int:project_id>")
+@login_required
 def generate_report(project_id):
     from docx import Document
     from docx.shared import Inches
@@ -1115,6 +1292,11 @@ def generate_report(project_id):
     import matplotlib.pyplot as plt
 
     project = Project.query.get_or_404(project_id)
+    team_member = get_current_team_member()
+    if team_member not in project.team_members:
+        flash("Access denied", "error")
+        return redirect(url_for("index"))
+    
     tasks = Task.query.filter_by(project_id=project_id).all()
 
     doc = Document()
@@ -1181,9 +1363,15 @@ def invite_settings():
     )
 
 @app.route("/project_members/<int:project_id>/resend/<int:member_id>")
+@login_required
 def resend_invitation(project_id, member_id):
     project = Project.query.get_or_404(project_id)
     member = TeamMember.query.get_or_404(member_id)
+    team_member = get_current_team_member()
+    
+    if team_member not in project.team_members:
+        flash("Access denied", "error")
+        return redirect(url_for("index"))
 
     if member not in project.team_members:
         flash("Member is not part of this project", "error")
@@ -1200,8 +1388,13 @@ def resend_invitation(project_id, member_id):
     return redirect(url_for("project_members", project_id=project.id))
 
 @app.route("/api/project/<int:project_id>/members")
+@login_required
 def get_project_members_api(project_id):
     project = Project.query.get_or_404(project_id)
+    team_member = get_current_team_member()
+    if team_member not in project.team_members:
+        return jsonify({"success": False, "message": "Access denied"}), 403
+    
     members = []
     for member in project.team_members:
         members.append({
@@ -1258,6 +1451,7 @@ def shutdown_session(exception=None):
 with app.app_context():
     try:
         db.create_all()
+        print("Database tables created successfully")
     except Exception as e:
         print(f"Error creating tables: {e}")
 
