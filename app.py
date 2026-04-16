@@ -5,6 +5,7 @@ import socket
 import secrets
 import hashlib
 import threading
+import logging
 from io import BytesIO
 from pathlib import Path
 from functools import wraps
@@ -24,6 +25,10 @@ try:
     from apscheduler.schedulers.background import BackgroundScheduler
 except Exception:
     BackgroundScheduler = None
+
+# ================= LOGGING SETUP =================
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # ================= ENV LOADING =================
 env_path = Path(__file__).parent / ".env"
@@ -53,7 +58,7 @@ app.config["UPLOAD_FOLDER"] = os.environ.get("UPLOAD_FOLDER", "static/uploads")
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", secrets.token_hex(32))
 app.config["MAX_CONTENT_LENGTH"] = 20 * 1024 * 1024
 app.config["SESSION_COOKIE_HTTPONLY"] = True
-app.config["SESSION_COOKIE_SECURE"] = os.environ.get("FLY_APP_NAME") is not None  # HTTPS on Fly.io
+app.config["SESSION_COOKIE_SECURE"] = os.environ.get("FLY_APP_NAME") is not None
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)
 
@@ -132,18 +137,43 @@ def login_required(f):
 def get_current_team_member():
     """Get or create TeamMember for the current logged-in User"""
     user_id = session.get('user_id')
+    logger.info(f"get_current_team_member called with user_id: {user_id}")
+    
     if not user_id:
+        logger.warning("No user_id in session")
         return None
     
     user = User.query.get(user_id)
     if not user:
+        logger.error(f"User not found for user_id: {user_id}")
         return None
     
-    # Check if user has a linked TeamMember
-    if user.team_member:
-        return user.team_member
+    logger.info(f"User found: {user.email} (id={user.id})")
     
-    # Create TeamMember for this user
+    # ALWAYS use email as the primary key to find TeamMember
+    # This ensures cross-device sync works
+    team_member = TeamMember.query.filter_by(email=user.email).first()
+    
+    if team_member:
+        logger.info(f"Found TeamMember by email: {team_member.id} ({team_member.email})")
+        # Update the user_id if not already set
+        if team_member.user_id != user.id:
+            logger.info(f"Linking TeamMember {team_member.id} to User {user.id}")
+            team_member.user_id = user.id
+            team_member.name = user.name
+            db.session.commit()
+        logger.info(f"TeamMember has {len(team_member.projects)} projects")
+        return team_member
+    
+    # Also check by user_id as fallback
+    team_member = TeamMember.query.filter_by(user_id=user.id).first()
+    if team_member:
+        logger.info(f"Found TeamMember by user_id: {team_member.id} ({team_member.email})")
+        logger.info(f"TeamMember has {len(team_member.projects)} projects")
+        return team_member
+    
+    # Create new TeamMember for this user
+    logger.info(f"Creating NEW TeamMember for user {user.id} ({user.email})")
     team_member = TeamMember(
         name=user.name,
         email=user.email,
@@ -151,6 +181,7 @@ def get_current_team_member():
     )
     db.session.add(team_member)
     db.session.commit()
+    logger.info(f"Created TeamMember {team_member.id}")
     
     return team_member
 
@@ -341,53 +372,97 @@ def test_email():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
+# ================= MAIN ENTRY PAGE - LOGIN =================
 @app.route("/")
 def index():
+    """Redirect to login page as the entry point"""
+    if 'user_id' in session:
+        return redirect(url_for('dashboard'))
+    return redirect(url_for('login'))
+
+@app.route("/dashboard")
+@login_required
+def dashboard():
+    """Main dashboard after login - shows projects"""
     try:
-        # Get projects for the current user using the unified system
+        user_id = session.get('user_id')
+        user = User.query.get(user_id)
+        logger.info(f"Dashboard accessed by user {user_id} ({user.email if user else 'unknown'})")
+        
         team_member = get_current_team_member()
         
         if team_member:
-            # Show projects the user is part of (same across all devices)
+            logger.info(f"TeamMember {team_member.id} has {len(team_member.projects)} projects")
             projects = team_member.projects
+            
+            # Log all project IDs for debugging
+            for p in projects:
+                logger.info(f"  - Project: {p.name} (ID: {p.id})")
         else:
-            # Not logged in - show public projects or empty
-            projects = Project.query.limit(10).all()
+            logger.error("No team_member found!")
+            projects = []
 
         for project in projects:
             for task in project.tasks:
                 task.media_files = MediaFile.query.filter_by(task_id=task.id).all()
 
+        logger.info(f"Rendering dashboard with {len(projects)} projects")
         return render_template("index.html", projects=projects, session=session)
     except Exception as e:
         db.session.rollback()
-        app.logger.error(f"Index error: {e}")
+        logger.error(f"Dashboard error: {e}", exc_info=True)
         return render_template("index.html", projects=[], session=session), 200
 
-# ================= API (GOOD FOR MULTI-DEVICE ACCESS) =================
+# ================= API ROUTES =================
 @app.route("/api/projects")
 @login_required
 def api_projects():
     team_member = get_current_team_member()
-    if team_member:
-        projects = team_member.projects
-    else:
-        projects = Project.query.limit(10).all()
+    projects = team_member.projects if team_member else []
+    
+    # Serialize projects with full task data for cross-device sync
+    projects_data = []
+    for p in projects:
+        tasks_data = []
+        for t in p.tasks:
+            media_data = []
+            for m in t.media_files:
+                media_data.append({
+                    "id": m.id,
+                    "filename": m.filename,
+                    "filepath": m.filepath,
+                    "file_type": m.file_type,
+                    "url": url_for('uploaded_file', filename=m.filename, _external=True)
+                })
+            tasks_data.append({
+                "id": t.id,
+                "name": t.name,
+                "progress": float(t.progress or 0),
+                "start_date": t.start_date.strftime("%Y-%m-%d") if t.start_date else None,
+                "end_date": t.end_date.strftime("%Y-%m-%d") if t.end_date else None,
+                "duration_days": t.duration_days,
+                "planned_cost": float(t.planned_cost or 0),
+                "actual_cost": float(t.actual_cost or 0),
+                "assigned_to": t.assigned_to.name if t.assigned_to else None,
+                "task_category": t.task_category,
+                "activity_description": t.activity_description,
+                "dependencies": t.dependencies,
+                "media": media_data
+            })
+        projects_data.append({
+            "id": p.id,
+            "name": p.name,
+            "project_type": p.project_type,
+            "start_date": p.start_date.strftime("%Y-%m-%d") if p.start_date else None,
+            "end_date": p.end_date.strftime("%Y-%m-%d") if p.end_date else None,
+            "completion": round(p.completion, 1),
+            "tasks_count": len(p.tasks),
+            "tasks": tasks_data
+        })
     
     return jsonify({
         "success": True,
-        "projects": [
-            {
-                "id": p.id,
-                "name": p.name,
-                "project_type": p.project_type,
-                "start_date": p.start_date.strftime("%Y-%m-%d") if p.start_date else None,
-                "end_date": p.end_date.strftime("%Y-%m-%d") if p.end_date else None,
-                "completion": round(p.completion, 1),
-                "tasks_count": len(p.tasks),
-            }
-            for p in projects
-        ]
+        "projects": projects_data
     })
 
 @app.route("/api/projects", methods=["POST"])
@@ -409,13 +484,61 @@ def api_create_project():
         db.session.add(project)
         safe_commit()
         
-        # Automatically add current user as a team member
         team_member = get_current_team_member()
         if team_member and team_member not in project.team_members:
             project.team_members.append(team_member)
             safe_commit()
+            logger.info(f"Added user {team_member.email} to project {project.name}")
 
         return jsonify({"success": True, "message": "Project created successfully", "project_id": project.id}), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"success": False, "message": str(e)}), 500
+
+@app.route("/api/projects/<int:project_id>", methods=["PUT"])
+@login_required
+def api_update_project(project_id):
+    project = Project.query.get_or_404(project_id)
+    team_member = get_current_team_member()
+    if team_member not in project.team_members:
+        return jsonify({"success": False, "message": "Access denied"}), 403
+    
+    data = request.get_json(force=True)
+    try:
+        if "name" in data:
+            project.name = data["name"]
+        if "project_type" in data:
+            project.project_type = data["project_type"]
+        if "start_date" in data:
+            project.start_date = parse_date(data["start_date"])
+        if "end_date" in data:
+            project.end_date = parse_date(data["end_date"])
+        
+        safe_commit()
+        return jsonify({"success": True, "message": "Project updated successfully"})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"success": False, "message": str(e)}), 500
+
+@app.route("/api/projects/<int:project_id>", methods=["DELETE"])
+@login_required
+def api_delete_project(project_id):
+    project = Project.query.get_or_404(project_id)
+    team_member = get_current_team_member()
+    if team_member not in project.team_members:
+        return jsonify({"success": False, "message": "Access denied"}), 403
+    
+    try:
+        # Delete all tasks and media first
+        for task in project.tasks:
+            for media in task.media_files:
+                if media.filepath and os.path.exists(media.filepath):
+                    os.remove(media.filepath)
+                db.session.delete(media)
+            db.session.delete(task)
+        db.session.delete(project)
+        safe_commit()
+        return jsonify({"success": True, "message": "Project deleted successfully"})
     except Exception as e:
         db.session.rollback()
         return jsonify({"success": False, "message": str(e)}), 500
@@ -429,6 +552,33 @@ def api_project_tasks(project_id):
         return jsonify({"success": False, "message": "Access denied"}), 403
     
     tasks = Task.query.filter_by(project_id=project.id).order_by(Task.created_at.asc()).all()
+    tasks_data = []
+    for t in tasks:
+        media_data = []
+        for m in t.media_files:
+            media_data.append({
+                "id": m.id,
+                "filename": m.filename,
+                "filepath": m.filepath,
+                "file_type": m.file_type,
+                "url": url_for('uploaded_file', filename=m.filename, _external=True)
+            })
+        tasks_data.append({
+            "id": t.id,
+            "name": t.name,
+            "progress": float(t.progress or 0),
+            "start_date": t.start_date.strftime("%Y-%m-%d") if t.start_date else None,
+            "end_date": t.end_date.strftime("%Y-%m-%d") if t.end_date else None,
+            "duration_days": t.duration_days,
+            "planned_cost": float(t.planned_cost or 0),
+            "actual_cost": float(t.actual_cost or 0),
+            "assigned_to": t.assigned_to.name if t.assigned_to else None,
+            "task_category": t.task_category,
+            "activity_description": t.activity_description,
+            "dependencies": t.dependencies,
+            "media": media_data
+        })
+    
     return jsonify({
         "success": True,
         "project": {
@@ -437,21 +587,7 @@ def api_project_tasks(project_id):
             "project_type": project.project_type,
             "completion": round(project.completion, 1),
         },
-        "tasks": [
-            {
-                "id": t.id,
-                "name": t.name,
-                "progress": float(t.progress or 0),
-                "start_date": t.start_date.strftime("%Y-%m-%d") if t.start_date else None,
-                "end_date": t.end_date.strftime("%Y-%m-%d") if t.end_date else None,
-                "duration_days": t.duration_days,
-                "planned_cost": float(t.planned_cost or 0),
-                "actual_cost": float(t.actual_cost or 0),
-                "assigned_to": t.assigned_to.name if t.assigned_to else None,
-                "task_category": t.task_category,
-            }
-            for t in tasks
-        ]
+        "tasks": tasks_data
     })
 
 @app.route("/api/projects/<int:project_id>/tasks", methods=["POST"])
@@ -495,6 +631,116 @@ def api_create_task(project_id):
         db.session.rollback()
         return jsonify({"success": False, "message": str(e)}), 500
 
+@app.route("/api/tasks/<int:task_id>", methods=["PUT"])
+@login_required
+def api_update_task(task_id):
+    task = Task.query.get_or_404(task_id)
+    project = Project.query.get(task.project_id)
+    team_member = get_current_team_member()
+    if team_member not in project.team_members:
+        return jsonify({"success": False, "message": "Access denied"}), 403
+    
+    data = request.get_json(force=True)
+    try:
+        if "name" in data:
+            task.name = data["name"]
+        if "progress" in data:
+            task.progress = float(data["progress"])
+        if "start_date" in data:
+            task.start_date = parse_date(data["start_date"])
+        if "end_date" in data:
+            task.end_date = parse_date(data["end_date"])
+        if "activity_description" in data:
+            task.activity_description = data["activity_description"]
+        if "dependencies" in data:
+            task.dependencies = data["dependencies"]
+        if "task_category" in data:
+            task.task_category = data["task_category"]
+        
+        safe_commit()
+        return jsonify({"success": True, "message": "Task updated successfully"})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"success": False, "message": str(e)}), 500
+
+@app.route("/api/tasks/<int:task_id>", methods=["DELETE"])
+@login_required
+def api_delete_task(task_id):
+    task = Task.query.get_or_404(task_id)
+    project = Project.query.get(task.project_id)
+    team_member = get_current_team_member()
+    if team_member not in project.team_members:
+        return jsonify({"success": False, "message": "Access denied"}), 403
+    
+    try:
+        for media in task.media_files:
+            if media.filepath and os.path.exists(media.filepath):
+                os.remove(media.filepath)
+            db.session.delete(media)
+        db.session.delete(task)
+        safe_commit()
+        return jsonify({"success": True, "message": "Task deleted successfully"})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"success": False, "message": str(e)}), 500
+
+@app.route("/api/tasks/<int:task_id>/media", methods=["POST"])
+@login_required
+def api_upload_media(task_id):
+    task = Task.query.get_or_404(task_id)
+    project = Project.query.get(task.project_id)
+    team_member = get_current_team_member()
+    if team_member not in project.team_members:
+        return jsonify({"success": False, "message": "Access denied"}), 403
+    
+    try:
+        uploaded_files = []
+        if 'images' in request.files:
+            for file in request.files.getlist('images'):
+                if file and file.filename and allowed_file(file.filename, "image"):
+                    filename = secure_filename(f"{datetime.now().timestamp()}_{file.filename}")
+                    filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+                    file.save(filepath)
+                    media = MediaFile(filename=filename, filepath=filepath, file_type="image", task_id=task.id)
+                    db.session.add(media)
+                    uploaded_files.append({"filename": filename, "type": "image"})
+        
+        if 'videos' in request.files:
+            for file in request.files.getlist('videos'):
+                if file and file.filename and allowed_file(file.filename, "video"):
+                    filename = secure_filename(f"{datetime.now().timestamp()}_{file.filename}")
+                    filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+                    file.save(filepath)
+                    media = MediaFile(filename=filename, filepath=filepath, file_type="video", task_id=task.id)
+                    db.session.add(media)
+                    uploaded_files.append({"filename": filename, "type": "video"})
+        
+        safe_commit()
+        return jsonify({"success": True, "message": f"Uploaded {len(uploaded_files)} files", "files": uploaded_files})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"success": False, "message": str(e)}), 500
+
+@app.route("/api/media/<int:media_id>", methods=["DELETE"])
+@login_required
+def api_delete_media(media_id):
+    media = MediaFile.query.get_or_404(media_id)
+    task = Task.query.get(media.task_id)
+    project = Project.query.get(task.project_id)
+    team_member = get_current_team_member()
+    if team_member not in project.team_members:
+        return jsonify({"success": False, "message": "Access denied"}), 403
+    
+    try:
+        if media.filepath and os.path.exists(media.filepath):
+            os.remove(media.filepath)
+        db.session.delete(media)
+        safe_commit()
+        return jsonify({"success": True, "message": "Media deleted successfully"})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"success": False, "message": str(e)}), 500
+
 # ================= PROJECT / TASK UI ROUTES =================
 @app.route("/add_project", methods=["POST"])
 @login_required
@@ -509,10 +755,11 @@ def add_project():
         db.session.add(project)
         db.session.flush()
         
-        # Automatically add current user as a team member
         team_member = get_current_team_member()
         if team_member and team_member not in project.team_members:
             project.team_members.append(team_member)
+            db.session.commit()
+            logger.info(f"Added user {team_member.email} to project {project.name}")
 
         if project_type == "Road":
             phases, detailed = ROAD_PHASES, False
@@ -564,11 +811,13 @@ def add_project():
 
         safe_commit()
         flash(f'Project "{name}" created successfully!', "success")
+        logger.info(f"Project '{name}' created with ID {project.id} for user {team_member.email if team_member else 'unknown'}")
     except Exception as e:
         db.session.rollback()
         flash(f"Error creating project: {str(e)}", "error")
+        logger.error(f"Error creating project: {e}")
 
-    return redirect(url_for("index"))
+    return redirect(url_for("dashboard"))
 
 @app.route("/edit_project/<int:project_id>", methods=["POST"])
 @login_required
@@ -577,7 +826,7 @@ def edit_project(project_id):
     team_member = get_current_team_member()
     if team_member not in project.team_members:
         flash("Access denied", "error")
-        return redirect(url_for("index"))
+        return redirect(url_for("dashboard"))
     
     try:
         project.name = request.form.get("name", project.name)
@@ -591,7 +840,7 @@ def edit_project(project_id):
     except Exception as e:
         db.session.rollback()
         flash(f"Error updating project: {str(e)}", "error")
-    return redirect(url_for("index"))
+    return redirect(url_for("dashboard"))
 
 @app.route("/report/<int:project_id>")
 @login_required
@@ -600,10 +849,14 @@ def report_view(project_id):
     team_member = get_current_team_member()
     if team_member not in project.team_members:
         flash("Access denied", "error")
-        return redirect(url_for("index"))
+        return redirect(url_for("dashboard"))
     
     tasks, members = project_report_payload(project)
-    return render_template("report.html", project=project, tasks=tasks, members=members)
+    return render_template("report.html", 
+                         project=project, 
+                         tasks=tasks, 
+                         members=members,
+                         datetime=datetime)
 
 @app.route("/project_members/<int:project_id>")
 @login_required
@@ -612,7 +865,7 @@ def project_members(project_id):
     team_member = get_current_team_member()
     if team_member not in project.team_members:
         flash("Access denied", "error")
-        return redirect(url_for("index"))
+        return redirect(url_for("dashboard"))
     return render_template("project_members.html", project=project)
 
 @app.route("/invite_members/<int:project_id>", methods=["POST"])
@@ -624,7 +877,7 @@ def invite_members(project_id):
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
             return jsonify({"success": False, "message": "Access denied"}), 403
         flash("Access denied", "error")
-        return redirect(url_for("index"))
+        return redirect(url_for("dashboard"))
     
     emails_input = request.form.get("emails", "")
     is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
@@ -697,16 +950,14 @@ def accept_invitation(token):
     member = TeamMember.query.filter_by(invite_token=token).first()
     if not member:
         flash("Invalid or expired invitation link.", "error")
-        return redirect(url_for("index"))
+        return redirect(url_for("login"))
 
     if member.token_expiry and datetime.utcnow() > member.token_expiry:
         flash("Invitation link has expired.", "error")
-        return redirect(url_for("index"))
+        return redirect(url_for("login"))
 
-    # Check if there's a User account with this email
     user = User.query.filter_by(email=member.email).first()
     if user:
-        # Link existing user
         if not member.user_id:
             member.user_id = user.id
             db.session.commit()
@@ -715,7 +966,6 @@ def accept_invitation(token):
         session['user_name'] = user.name
         session.permanent = True
     else:
-        # Need to create user account first
         flash("Please complete your registration to access the project.", "info")
         return redirect(url_for('register_with_invite', email=member.email, token=token))
 
@@ -724,7 +974,7 @@ def accept_invitation(token):
     db.session.commit()
 
     flash(f"Welcome {member.name or member.email}! You now have access to the project.", "success")
-    return redirect(url_for("index"))
+    return redirect(url_for("dashboard"))
 
 @app.route('/register_with_invite')
 def register_with_invite():
@@ -738,9 +988,6 @@ def register_with_invite():
 # ================= REGISTER/LOGIN/LOGOUT ROUTES =================
 @app.route('/register', methods=['GET', 'POST'])
 def register():
-    invite_email = request.args.get('email') or request.form.get('invite_email')
-    invite_token = request.args.get('token') or request.form.get('invite_token')
-    
     if request.method == 'POST':
         email = (request.form.get('email') or '').strip().lower()
         name = (request.form.get('name') or '').strip()
@@ -766,12 +1013,13 @@ def register():
             db.session.add(user)
             db.session.flush()
             
-            # Check if there's an existing TeamMember with this email
+            # Check for existing TeamMember by email
             team_member = TeamMember.query.filter_by(email=email).first()
             if team_member:
                 # Link existing TeamMember to this user
                 team_member.user_id = user.id
                 team_member.name = name
+                logger.info(f"Linked existing TeamMember {team_member.id} to new User {user.id}")
             else:
                 # Create new TeamMember
                 team_member = TeamMember(
@@ -780,15 +1028,7 @@ def register():
                     user_id=user.id
                 )
                 db.session.add(team_member)
-            
-            # If coming from invitation, add to project
-            if invite_token:
-                invited_member = TeamMember.query.filter_by(invite_token=invite_token).first()
-                if invited_member and invited_member.email == email:
-                    invited_member.user_id = user.id
-                    invited_member.name = name
-                    invited_member.invite_token = None
-                    invited_member.token_expiry = None
+                logger.info(f"Created new TeamMember for user {email}")
             
             db.session.commit()
             
@@ -801,17 +1041,20 @@ def register():
             session.permanent = True
 
             flash("Account created and logged in successfully!", "success")
-            return redirect(url_for("index"))
+            return redirect(url_for("dashboard"))
 
         except Exception as e:
             db.session.rollback()
             flash(f"Registration failed: {str(e)}", "error")
             return redirect(url_for('register'))
 
-    return render_template("register.html", invite_email=invite_email, invite_token=invite_token)
+    return render_template("register.html")
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    if 'user_id' in session:
+        return redirect(url_for('dashboard'))
+    
     if request.method == 'POST':
         email = request.form.get('email').strip().lower()
         password = request.form.get('password')
@@ -840,13 +1083,20 @@ def login():
                 )
                 db.session.add(team_member)
                 db.session.commit()
+                logger.info(f"Created new TeamMember during login for {email}")
             elif team_member.user_id != user.id:
+                # Link existing TeamMember to this user
                 team_member.user_id = user.id
                 team_member.name = user.name
                 db.session.commit()
+                logger.info(f"Linked existing TeamMember {team_member.id} to User {user.id}")
+
+            # Verify the user has projects
+            projects_count = len(team_member.projects) if team_member else 0
+            logger.info(f"User {email} has {projects_count} projects linked")
 
             flash('Login successful! Your projects are synced across all devices.', 'success')
-            return redirect(url_for('index'))
+            return redirect(url_for('dashboard'))
         else:
             flash('Invalid email or password.', 'error')
             return redirect(url_for('login'))
@@ -859,26 +1109,114 @@ def logout():
     flash('You have been logged out.', 'info')
     return redirect(url_for('login'))
 
-@app.route('/dashboard')
+# ================= DEBUG ROUTES =================
+@app.route("/debug/user_info")
 @login_required
-def dashboard():
-    return render_template('dashboard.html')
+def debug_user_info():
+    """Diagnostic route to check user/team_member state"""
+    admin_emails = os.environ.get("ADMIN_EMAILS", "").split(",")
+    admin_emails = [email.strip().lower() for email in admin_emails if email.strip()]
+    
+    user = User.query.get(session.get("user_id"))
+    if not user or user.email not in admin_emails:
+        return "Access denied. Admin only.", 403
+    
+    info = {
+        "database_url": app.config["SQLALCHEMY_DATABASE_URI"][:50] + "...",
+        "current_user": {
+            "id": user.id,
+            "email": user.email,
+            "name": user.name
+        },
+        "users": [],
+        "team_members": [],
+        "projects": []
+    }
+    
+    for u in User.query.all():
+        info["users"].append({
+            "id": u.id,
+            "email": u.email,
+            "name": u.name
+        })
+    
+    for tm in TeamMember.query.all():
+        info["team_members"].append({
+            "id": tm.id,
+            "email": tm.email,
+            "name": tm.name,
+            "user_id": tm.user_id,
+            "projects_count": len(tm.projects),
+            "project_ids": [p.id for p in tm.projects]
+        })
+    
+    for p in Project.query.all():
+        info["projects"].append({
+            "id": p.id,
+            "name": p.name,
+            "members_count": len(p.team_members),
+            "members": [{"id": m.id, "email": m.email} for m in p.team_members]
+        })
+    
+    return jsonify(info)
 
-@app.route("/admin", methods=["GET", "POST"])
-def admin():
-    """Admin portal for managing team members"""
+@app.route('/fix_team_members')
+def fix_team_members():
+    """Admin route to fix existing TeamMember-User links"""
     admin_emails = os.environ.get("ADMIN_EMAILS", "").split(",")
     admin_emails = [email.strip().lower() for email in admin_emails if email.strip()]
     
     user_id = session.get("user_id")
-    if user_id:
-        user = User.query.get(user_id)
-        if not user or user.email not in admin_emails:
-            flash("Access denied. Admin privileges required.", "error")
-            return redirect(url_for("index"))
-    else:
-        flash("Please login as admin.", "error")
-        return redirect(url_for("login"))
+    if not user_id:
+        return "Please login as admin", 401
+    
+    user = User.query.get(user_id)
+    if not user or user.email not in admin_emails:
+        return "Access denied. Admin only.", 403
+    
+    fixed_count = 0
+    linked_count = 0
+    
+    # Fix TeamMember-User links
+    all_members = TeamMember.query.all()
+    
+    result_html = "<h1>TeamMember Fix Report</h1>"
+    result_html += "<table border='1'><tr><th>ID</th><th>Email</th><th>Name</th><th>User ID</th><th>Projects Count</th><th>Action</th></tr>"
+    
+    for member in all_members:
+        user = User.query.filter_by(email=member.email).first()
+        if user and not member.user_id:
+            member.user_id = user.id
+            member.name = user.name
+            fixed_count += 1
+            result_html += f"<tr bgcolor='#90EE90'><td>{member.id}</td><td>{member.email}</td><td>{member.name}</td><td>{member.user_id}</td><td>{len(member.projects)}</td><td>FIXED</td></tr>"
+        elif user and member.user_id != user.id:
+            member.user_id = user.id
+            member.name = user.name
+            linked_count += 1
+            result_html += f"<tr bgcolor='#FFFF00'><td>{member.id}</td><td>{member.email}</td><td>{member.name}</td><td>{member.user_id}</td><td>{len(member.projects)}</td><td>RE-LINKED</td></tr>"
+        else:
+            result_html += f"<tr><td>{member.id}</td><td>{member.email}</td><td>{member.name}</td><td>{member.user_id}</td><td>{len(member.projects)}</td><td>{'OK' if member.user_id else 'ORPHAN'}</td></tr>"
+    
+    result_html += "</table>"
+    result_html += f"<p>Fixed {fixed_count} TeamMember-User links.</p>"
+    result_html += f"<p>Re-linked {linked_count} TeamMember-User links.</p>"
+    
+    db.session.commit()
+    
+    return result_html
+
+# ================= ADMIN ROUTES =================
+@app.route("/admin", methods=["GET", "POST"])
+@login_required
+def admin():
+    admin_emails = os.environ.get("ADMIN_EMAILS", "").split(",")
+    admin_emails = [email.strip().lower() for email in admin_emails if email.strip()]
+    
+    user = User.query.get(session.get("user_id"))
+    if not user or user.email not in admin_emails:
+        flash("Access denied. Admin privileges required.", "error")
+        return redirect(url_for("dashboard"))
     
     if request.method == "POST":
         email = request.form.get("email", "").strip().lower()
@@ -916,7 +1254,8 @@ def admin():
             "email": member.email,
             "joined_at": member.joined_at,
             "is_admin": member.email in admin_emails,
-            "has_user_account": member.user_id is not None
+            "has_user_account": member.user_id is not None,
+            "projects_count": len(member.projects)
         })
     
     return render_template("admin.html", 
@@ -927,19 +1266,15 @@ def admin():
                          admin_count=len([m for m in members if m.email in admin_emails]))
 
 @app.route("/admin/delete_member/<int:member_id>", methods=["POST"])
+@login_required
 def delete_member(member_id):
     admin_emails = os.environ.get("ADMIN_EMAILS", "").split(",")
     admin_emails = [email.strip().lower() for email in admin_emails if email.strip()]
     
-    user_id = session.get("user_id")
-    if user_id:
-        user = User.query.get(user_id)
-        if not user or user.email not in admin_emails:
-            flash("Access denied. Admin privileges required.", "error")
-            return redirect(url_for("index"))
-    else:
-        flash("Please login as admin.", "error")
-        return redirect(url_for("login"))
+    user = User.query.get(session.get("user_id"))
+    if not user or user.email not in admin_emails:
+        flash("Access denied. Admin privileges required.", "error")
+        return redirect(url_for("dashboard"))
     
     member = TeamMember.query.get_or_404(member_id)
     
@@ -963,6 +1298,7 @@ def delete_member(member_id):
     
     return redirect(url_for("admin"))
 
+# ================= TASK ROUTES =================
 @app.route("/update_task/<int:task_id>", methods=["POST"])
 @login_required
 def update_task(task_id):
@@ -971,7 +1307,7 @@ def update_task(task_id):
     team_member = get_current_team_member()
     if team_member not in project.team_members:
         flash("Access denied", "error")
-        return redirect(url_for("index"))
+        return redirect(url_for("dashboard"))
     
     try:
         task.progress = float(request.form.get("progress", task.progress))
@@ -986,7 +1322,7 @@ def update_task(task_id):
     except Exception as e:
         db.session.rollback()
         flash(f"Could not update task: {e}", "error")
-    return redirect(url_for("index"))
+    return redirect(url_for("dashboard"))
 
 @app.route("/edit_task/<int:task_id>", methods=["GET", "POST"], strict_slashes=False)
 @app.route("/edit_task/<int:task_id>/", methods=["GET", "POST"], strict_slashes=False)
@@ -998,7 +1334,7 @@ def edit_task(task_id):
     
     if not project or team_member not in project.team_members:
         flash("Access denied", "error")
-        return redirect(url_for("index"))
+        return redirect(url_for("dashboard"))
 
     if request.method == "POST":
         try:
@@ -1070,6 +1406,191 @@ def edit_task(task_id):
     media_files = MediaFile.query.filter_by(task_id=task.id).all()
     return render_template("edit_task.html", task=task, project=project, media_files=media_files)
 
+# ================= DELETE ROUTES =================
+@app.route("/delete_media/<int:media_id>")
+@login_required
+def delete_media(media_id):
+    media = MediaFile.query.get_or_404(media_id)
+    task = Task.query.get(media.task_id)
+    if task:
+        project = Project.query.get(task.project_id)
+        team_member = get_current_team_member()
+        if team_member not in project.team_members:
+            flash("Access denied", "error")
+            return redirect(url_for("dashboard"))
+    
+    task_id = media.task_id
+    try:
+        if media.filepath and os.path.exists(media.filepath):
+            os.remove(media.filepath)
+        db.session.delete(media)
+        safe_commit()
+        flash("Media file deleted successfully!", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Could not delete media: {str(e)}", "error")
+    return redirect(url_for("edit_task", task_id=task_id))
+
+@app.route("/delete_task/<int:task_id>")
+@login_required
+def delete_task(task_id):
+    task = Task.query.get_or_404(task_id)
+    project = Project.query.get(task.project_id)
+    team_member = get_current_team_member()
+    if team_member not in project.team_members:
+        flash("Access denied", "error")
+        return redirect(url_for("dashboard"))
+    
+    try:
+        for media in MediaFile.query.filter_by(task_id=task_id).all():
+            if media.filepath and os.path.exists(media.filepath):
+                os.remove(media.filepath)
+            db.session.delete(media)
+        db.session.delete(task)
+        safe_commit()
+        flash("Task deleted.", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Could not delete task: {str(e)}", "error")
+    return redirect(url_for("dashboard"))
+
+@app.route("/delete_all_tasks/<int:project_id>")
+@login_required
+def delete_all_tasks(project_id):
+    project = Project.query.get_or_404(project_id)
+    team_member = get_current_team_member()
+    if team_member not in project.team_members:
+        flash("Access denied", "error")
+        return redirect(url_for("dashboard"))
+    
+    try:
+        tasks = Task.query.filter_by(project_id=project_id).all()
+        for task in tasks:
+            for media in MediaFile.query.filter_by(task_id=task.id).all():
+                if media.filepath and os.path.exists(media.filepath):
+                    os.remove(media.filepath)
+                db.session.delete(media)
+            db.session.delete(task)
+        safe_commit()
+        flash("All tasks deleted.", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Could not delete tasks: {str(e)}", "error")
+    return redirect(url_for("dashboard"))
+
+@app.route("/delete_project/<int:project_id>")
+@login_required
+def delete_project(project_id):
+    project = Project.query.get_or_404(project_id)
+    team_member = get_current_team_member()
+    if team_member not in project.team_members:
+        flash("Access denied", "error")
+        return redirect(url_for("dashboard"))
+    
+    try:
+        tasks = Task.query.filter_by(project_id=project.id).all()
+        for task in tasks:
+            for media in MediaFile.query.filter_by(task_id=task.id).all():
+                if media.filepath and os.path.exists(media.filepath):
+                    os.remove(media.filepath)
+                db.session.delete(media)
+        Task.query.filter_by(project_id=project.id).delete()
+        db.session.delete(project)
+        safe_commit()
+        flash("Project deleted.", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Could not delete project: {str(e)}", "error")
+    return redirect(url_for("dashboard"))
+
+# ================= REPORT ROUTES =================
+@app.route("/project_report/<int:project_id>")
+@login_required
+def project_report(project_id):
+    project = Project.query.get_or_404(project_id)
+    team_member = get_current_team_member()
+    if team_member not in project.team_members:
+        flash("Access denied", "error")
+        return redirect(url_for("dashboard"))
+    
+    tasks = Task.query.filter_by(project_id=project_id).all()
+    doc = BytesIO()
+    doc.write(f"{project.name} Report\n".encode())
+    for t in tasks:
+        doc.write(f"{t.name}: {t.progress}%\n".encode())
+    doc.seek(0)
+    return send_file(doc, as_attachment=True, download_name=f"{project.name}_report.txt")
+
+@app.route("/generate_report/<int:project_id>")
+@login_required
+def generate_report(project_id):
+    from docx import Document
+    from docx.shared import Inches
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    project = Project.query.get_or_404(project_id)
+    team_member = get_current_team_member()
+    if team_member not in project.team_members:
+        flash("Access denied", "error")
+        return redirect(url_for("dashboard"))
+    
+    tasks = Task.query.filter_by(project_id=project_id).all()
+
+    doc = Document()
+    doc.add_heading(f"{project.name} - Progress Report", 0)
+    doc.add_paragraph(f"Type: {project.project_type}")
+    if project.start_date:
+        doc.add_paragraph(f"Start Date: {project.start_date}")
+    if project.end_date:
+        doc.add_paragraph(f"End Date: {project.end_date}")
+    doc.add_paragraph(f"Overall Completion: {project.completion:.1f}%")
+
+    doc.add_heading("Task Progress", level=1)
+    for t in tasks:
+        doc.add_paragraph(f"{t.name}: {t.progress}%")
+        media_files = MediaFile.query.filter_by(task_id=t.id).all()
+        if media_files:
+            doc.add_paragraph(f"  Attached files: {len(media_files)}")
+            for media in media_files:
+                doc.add_paragraph(f"    - {media.filename} ({media.file_type})")
+
+    try:
+        plt.figure(figsize=(6, 4))
+        plt.bar([t.name for t in tasks], [float(t.progress or 0) for t in tasks])
+        plt.ylabel("Progress (%)")
+        plt.xticks(rotation=45, ha="right")
+        plt.tight_layout()
+        img_stream1 = BytesIO()
+        plt.savefig(img_stream1, format="png")
+        img_stream1.seek(0)
+        doc.add_picture(img_stream1, width=Inches(5))
+        plt.close()
+
+        plt.figure(figsize=(4, 4))
+        completion = max(0.0, min(100.0, project.completion or 0))
+        plt.pie([completion, max(0, 100 - completion)], labels=["Completed", "Remaining"], autopct="%1.1f%%")
+        plt.title("Overall Completion")
+        img_stream2 = BytesIO()
+        plt.savefig(img_stream2, format="png")
+        img_stream2.seek(0)
+        doc.add_picture(img_stream2, width=Inches(4))
+        plt.close()
+    except Exception as e:
+        print(f"Error generating charts: {e}")
+
+    word_stream = BytesIO()
+    doc.save(word_stream)
+    word_stream.seek(0)
+    return send_file(
+        word_stream,
+        as_attachment=True,
+        download_name=f"{project.name}_report.docx",
+        mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    )
+
+# ================= OTHER ROUTES =================
 @app.route("/gantt_data")
 @login_required
 def gantt_data():
@@ -1078,7 +1599,7 @@ def gantt_data():
         project_ids = [p.id for p in team_member.projects]
         tasks = Task.query.filter(Task.project_id.in_(project_ids)).all()
     else:
-        tasks = Task.query.limit(50).all()
+        tasks = []
     
     data = []
     for t in tasks:
@@ -1175,190 +1696,6 @@ def team_performance(project_id):
         })
     return jsonify(result)
 
-# ================= DELETE ROUTES =================
-@app.route("/delete_media/<int:media_id>")
-@login_required
-def delete_media(media_id):
-    media = MediaFile.query.get_or_404(media_id)
-    task = Task.query.get(media.task_id)
-    if task:
-        project = Project.query.get(task.project_id)
-        team_member = get_current_team_member()
-        if team_member not in project.team_members:
-            flash("Access denied", "error")
-            return redirect(url_for("index"))
-    
-    task_id = media.task_id
-    try:
-        if media.filepath and os.path.exists(media.filepath):
-            os.remove(media.filepath)
-        db.session.delete(media)
-        safe_commit()
-        flash("Media file deleted successfully!", "success")
-    except Exception as e:
-        db.session.rollback()
-        flash(f"Could not delete media: {str(e)}", "error")
-    return redirect(url_for("edit_task", task_id=task_id))
-
-@app.route("/delete_task/<int:task_id>")
-@login_required
-def delete_task(task_id):
-    task = Task.query.get_or_404(task_id)
-    project = Project.query.get(task.project_id)
-    team_member = get_current_team_member()
-    if team_member not in project.team_members:
-        flash("Access denied", "error")
-        return redirect(url_for("index"))
-    
-    try:
-        for media in MediaFile.query.filter_by(task_id=task_id).all():
-            if media.filepath and os.path.exists(media.filepath):
-                os.remove(media.filepath)
-            db.session.delete(media)
-        db.session.delete(task)
-        safe_commit()
-        flash("Task deleted.", "success")
-    except Exception as e:
-        db.session.rollback()
-        flash(f"Could not delete task: {str(e)}", "error")
-    return redirect(url_for("index"))
-
-@app.route("/delete_all_tasks/<int:project_id>")
-@login_required
-def delete_all_tasks(project_id):
-    project = Project.query.get_or_404(project_id)
-    team_member = get_current_team_member()
-    if team_member not in project.team_members:
-        flash("Access denied", "error")
-        return redirect(url_for("index"))
-    
-    try:
-        tasks = Task.query.filter_by(project_id=project_id).all()
-        for task in tasks:
-            for media in MediaFile.query.filter_by(task_id=task.id).all():
-                if media.filepath and os.path.exists(media.filepath):
-                    os.remove(media.filepath)
-                db.session.delete(media)
-            db.session.delete(task)
-        safe_commit()
-        flash("All tasks deleted.", "success")
-    except Exception as e:
-        db.session.rollback()
-        flash(f"Could not delete tasks: {str(e)}", "error")
-    return redirect(url_for("index"))
-
-@app.route("/delete_project/<int:project_id>")
-@login_required
-def delete_project(project_id):
-    project = Project.query.get_or_404(project_id)
-    team_member = get_current_team_member()
-    if team_member not in project.team_members:
-        flash("Access denied", "error")
-        return redirect(url_for("index"))
-    
-    try:
-        tasks = Task.query.filter_by(project_id=project.id).all()
-        for task in tasks:
-            for media in MediaFile.query.filter_by(task_id=task.id).all():
-                if media.filepath and os.path.exists(media.filepath):
-                    os.remove(media.filepath)
-                db.session.delete(media)
-        Task.query.filter_by(project_id=project.id).delete()
-        db.session.delete(project)
-        safe_commit()
-        flash("Project deleted.", "success")
-    except Exception as e:
-        db.session.rollback()
-        flash(f"Could not delete project: {str(e)}", "error")
-    return redirect(url_for("index"))
-
-# ================= REPORT ROUTES =================
-@app.route("/project_report/<int:project_id>")
-@login_required
-def project_report(project_id):
-    project = Project.query.get_or_404(project_id)
-    team_member = get_current_team_member()
-    if team_member not in project.team_members:
-        flash("Access denied", "error")
-        return redirect(url_for("index"))
-    
-    tasks = Task.query.filter_by(project_id=project_id).all()
-    doc = BytesIO()
-    doc.write(f"{project.name} Report\n".encode())
-    for t in tasks:
-        doc.write(f"{t.name}: {t.progress}%\n".encode())
-    doc.seek(0)
-    return send_file(doc, as_attachment=True, download_name=f"{project.name}_report.txt")
-
-@app.route("/generate_report/<int:project_id>")
-@login_required
-def generate_report(project_id):
-    from docx import Document
-    from docx.shared import Inches
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-
-    project = Project.query.get_or_404(project_id)
-    team_member = get_current_team_member()
-    if team_member not in project.team_members:
-        flash("Access denied", "error")
-        return redirect(url_for("index"))
-    
-    tasks = Task.query.filter_by(project_id=project_id).all()
-
-    doc = Document()
-    doc.add_heading(f"{project.name} - Progress Report", 0)
-    doc.add_paragraph(f"Type: {project.project_type}")
-    if project.start_date:
-        doc.add_paragraph(f"Start Date: {project.start_date}")
-    if project.end_date:
-        doc.add_paragraph(f"End Date: {project.end_date}")
-    doc.add_paragraph(f"Overall Completion: {project.completion:.1f}%")
-
-    doc.add_heading("Task Progress", level=1)
-    for t in tasks:
-        doc.add_paragraph(f"{t.name}: {t.progress}%")
-        media_files = MediaFile.query.filter_by(task_id=t.id).all()
-        if media_files:
-            doc.add_paragraph(f"  Attached files: {len(media_files)}")
-            for media in media_files:
-                doc.add_paragraph(f"    - {media.filename} ({media.file_type})")
-
-    try:
-        plt.figure(figsize=(6, 4))
-        plt.bar([t.name for t in tasks], [float(t.progress or 0) for t in tasks])
-        plt.ylabel("Progress (%)")
-        plt.xticks(rotation=45, ha="right")
-        plt.tight_layout()
-        img_stream1 = BytesIO()
-        plt.savefig(img_stream1, format="png")
-        img_stream1.seek(0)
-        doc.add_picture(img_stream1, width=Inches(5))
-        plt.close()
-
-        plt.figure(figsize=(4, 4))
-        completion = max(0.0, min(100.0, project.completion or 0))
-        plt.pie([completion, max(0, 100 - completion)], labels=["Completed", "Remaining"], autopct="%1.1f%%")
-        plt.title("Overall Completion")
-        img_stream2 = BytesIO()
-        plt.savefig(img_stream2, format="png")
-        img_stream2.seek(0)
-        doc.add_picture(img_stream2, width=Inches(4))
-        plt.close()
-    except Exception as e:
-        print(f"Error generating charts: {e}")
-
-    word_stream = BytesIO()
-    doc.save(word_stream)
-    word_stream.seek(0)
-    return send_file(
-        word_stream,
-        as_attachment=True,
-        download_name=f"{project.name}_report.docx",
-        mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    )
-
 @app.route("/invite_settings")
 def invite_settings():
     email_configured = bool(app.config["MAIL_USERNAME"] and app.config["MAIL_PASSWORD"])
@@ -1379,7 +1716,7 @@ def resend_invitation(project_id, member_id):
     
     if team_member not in project.team_members:
         flash("Access denied", "error")
-        return redirect(url_for("index"))
+        return redirect(url_for("dashboard"))
 
     if member not in project.team_members:
         flash("Member is not part of this project", "error")
@@ -1419,7 +1756,6 @@ def get_project_members_api(project_id):
         "total_members": len(members)
     })
 
-# ================= OTHER ROUTES =================
 @app.route("/drone_view")
 def drone_view():
     try:
@@ -1431,7 +1767,7 @@ def drone_view():
         <head><title>Drone View</title></head>
         <body>
             <h1>Drone View Coming Soon</h1>
-            <a href="/">Back to Dashboard</a>
+            <a href="/dashboard">Back to Dashboard</a>
         </body>
         </html>
         """
@@ -1443,12 +1779,12 @@ def uploaded_file(filename):
 # ================= ERROR HANDLERS =================
 @app.errorhandler(404)
 def not_found(e):
-    return "<h1>404</h1><p>Page not found</p><a href='/'>Home</a>", 404
+    return "<h1>404</h1><p>Page not found</p><a href='/login'>Login</a>", 404
 
 @app.errorhandler(500)
 def internal_error(e):
     db.session.rollback()
-    return "<h1>500</h1><p>Internal server error</p><a href='/'>Home</a>", 500
+    return "<h1>500</h1><p>Internal server error</p><a href='/login'>Login</a>", 500
 
 @app.teardown_appcontext
 def shutdown_session(exception=None):
@@ -1459,17 +1795,17 @@ def shutdown_session(exception=None):
 with app.app_context():
     try:
         db.create_all()
-        print("Database tables created successfully")
+        logger.info("Database tables created successfully")
     except Exception as e:
-        print(f"Error creating tables: {e}")
+        logger.error(f"Error creating tables: {e}")
 
     if scheduler and not scheduler.running:
         try:
             scheduler.add_job(send_weekly_reports, "cron", day_of_week="mon", hour=8, minute=0)
             scheduler.start()
-            print("Weekly report scheduler started")
+            logger.info("Weekly report scheduler started")
         except Exception as e:
-            print(f"Scheduler start failed: {e}")
+            logger.error(f"Scheduler start failed: {e}")
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=False)
