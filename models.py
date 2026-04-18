@@ -122,7 +122,6 @@ class Task(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
-    # FIXED: This is the correct relationship name - 'media_files'
     media_files = db.relationship(
         "MediaFile",
         backref="task",

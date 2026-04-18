@@ -77,6 +77,14 @@ migrate = Migrate(app, db)
 # Create tables if they don't exist
 with app.app_context():
     db.create_all()
+    
+    # Set first user as admin if no admin exists
+    if not User.query.filter_by(role='admin').first():
+        first_user = User.query.first()
+        if first_user:
+            first_user.role = 'admin'
+            db.session.commit()
+            print(f"Set {first_user.email} as admin")
 
 # ================= SCHEDULER =================
 scheduler = BackgroundScheduler() if BackgroundScheduler else None
@@ -295,6 +303,7 @@ def api_projects():
         try:
             user = User.query.get(session['user_id'])
             tm = TeamMember.query.filter_by(email=user.email).first()
+            # Get projects where user is a team member
             projects = tm.projects if tm else []
             projects_list = []
             for p in projects:
@@ -351,6 +360,7 @@ def api_projects():
             db.session.add(project)
             db.session.flush()
             
+            # Add the current user as a team member to the project
             user = User.query.get(session['user_id'])
             tm = TeamMember.query.filter_by(email=user.email).first()
             if tm:
@@ -369,6 +379,12 @@ def api_projects():
 @login_required
 def api_project_detail(project_id):
     project = Project.query.get_or_404(project_id)
+    
+    # Check if user has access to this project
+    user = User.query.get(session['user_id'])
+    tm = TeamMember.query.filter_by(email=user.email).first()
+    if tm not in project.team_members and session.get('user_role') != 'admin':
+        return jsonify({"success": False, "error": "Access denied"}), 403
     
     if request.method == 'PUT':
         try:
@@ -391,6 +407,10 @@ def api_project_detail(project_id):
     
     elif request.method == 'DELETE':
         try:
+            # Only admin can delete projects
+            if session.get('user_role') != 'admin':
+                return jsonify({"success": False, "error": "Only admin can delete projects"}), 403
+            
             db.session.delete(project)
             db.session.commit()
             return jsonify({"success": True})
@@ -405,6 +425,13 @@ def api_project_detail(project_id):
 def api_add_task(project_id):
     try:
         project = Project.query.get_or_404(project_id)
+        
+        # Check if user has access to this project
+        user = User.query.get(session['user_id'])
+        tm = TeamMember.query.filter_by(email=user.email).first()
+        if tm not in project.team_members and session.get('user_role') != 'admin':
+            return jsonify({"success": False, "error": "Access denied"}), 403
+        
         data = request.get_json()
         
         task = Task(
@@ -433,8 +460,7 @@ def api_add_project_member(project_id):
         data = request.get_json()
         email = data.get('email', '').lower()
         
-        # Check if user has admin role or is the project creator
-        user = User.query.get(session['user_id'])
+        # Check if user has admin role
         is_admin = session.get('user_role') == 'admin'
         
         if not is_admin:
@@ -518,6 +544,12 @@ def api_admin_all_users():
 def api_task_detail(task_id):
     task = Task.query.get_or_404(task_id)
     
+    # Check if user has access to this task's project
+    user = User.query.get(session['user_id'])
+    tm = TeamMember.query.filter_by(email=user.email).first()
+    if tm not in task.project.team_members and session.get('user_role') != 'admin':
+        return jsonify({"success": False, "error": "Access denied"}), 403
+    
     if request.method == 'PUT':
         try:
             data = request.get_json()
@@ -553,6 +585,12 @@ def api_task_detail(task_id):
 def api_upload_media(task_id):
     try:
         task = Task.query.get_or_404(task_id)
+        
+        # Check if user has access to this task's project
+        user = User.query.get(session['user_id'])
+        tm = TeamMember.query.filter_by(email=user.email).first()
+        if tm not in task.project.team_members and session.get('user_role') != 'admin':
+            return jsonify({"success": False, "error": "Access denied"}), 403
         
         if 'images' in request.files:
             files = request.files.getlist('images')

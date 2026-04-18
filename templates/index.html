@@ -649,10 +649,12 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
+  // Global variables
   let projectsData = [];
   let syncInProgress = false;
   const userRole = '{{ session.get("user_role", "team_member") }}';
 
+  // Toast notification function
   function showToast(message, type = 'info') {
     const toastContainer = document.querySelector('.toast-notification') || (() => {
       const div = document.createElement('div');
@@ -694,7 +696,7 @@
       });
       const data = await response.json();
       if (data.success) {
-        await loadProjectsFromServer(); // Reload all data
+        await loadProjectsFromServer();
         return true;
       }
       return false;
@@ -832,6 +834,7 @@
     }
   }
 
+  // Escape HTML to prevent XSS
   function escapeHtml(text) {
     if (!text) return '';
     const div = document.createElement('div');
@@ -848,7 +851,7 @@
         const select = document.getElementById('memberUserSelect');
         select.innerHTML = '<option value="">Select a user...</option>';
         data.users.forEach(user => {
-          select.innerHTML += `<option value="${user.email}">${user.name} (${user.email}) - ${user.role}</option>`;
+          select.innerHTML += `<option value="${user.email}">${escapeHtml(user.name)} (${escapeHtml(user.email)}) - ${user.role}</option>`;
         });
       }
     } catch (error) {
@@ -866,7 +869,7 @@
       const data = await response.json();
       if (data.success) {
         showToast(data.message, 'success');
-        await loadProjectsFromServer(); // Refresh to show updated projects for all users
+        await loadProjectsFromServer();
         return true;
       } else {
         showToast(data.error, 'danger');
@@ -879,7 +882,7 @@
     }
   }
 
-  // Render functions remain similar but use server data
+  // Update statistics display
   function updateStats() {
     let total = projectsData.length;
     let avgComp = total ? Math.round(projectsData.reduce((acc, p) => acc + (p.completion || 0), 0) / total) : 0;
@@ -889,6 +892,7 @@
     document.getElementById('statOntrack').innerText = onTrack;
   }
 
+  // Render projects grid
   function renderProjects(filterText = "") {
     const container = document.getElementById('projectsContainer');
     if (!container) return;
@@ -978,6 +982,7 @@
     renderGanttChart();
   }
 
+  // Attach event listeners to project buttons
   function attachProjectEventListeners() {
     document.querySelectorAll('.edit-project-btn').forEach(btn => {
       btn.onclick = async () => {
@@ -1027,7 +1032,7 @@
       };
     });
     
-    // Add member button handler
+    // Add member button handler (only for admin)
     document.querySelectorAll('.add-member-btn').forEach(btn => {
       btn.onclick = async () => {
         const projectId = parseInt(btn.dataset.id);
@@ -1041,6 +1046,7 @@
     });
   }
 
+  // Attach progress update events
   function attachProgressEvents() {
     document.querySelectorAll('.update-progress-btn').forEach(btn => {
       btn.onclick = async () => {
@@ -1054,6 +1060,7 @@
     });
   }
 
+  // Render Gantt chart
   function renderGanttChart() {
     let tasksForGantt = [];
     projectsData.forEach(proj => {
@@ -1098,6 +1105,7 @@
     }
   }
 
+  // Open report modal
   function openReport(projectId) {
     const project = projectsData.find(p => p.id === projectId);
     if (!project) return;
@@ -1144,10 +1152,10 @@
                     <div class="progress" style="height: 20px;">
                       <div class="progress-bar" style="width: ${task.progress || 0}%">${task.progress || 0}%</div>
                     </div>
-                   </td>
+                  </td>
                   <td>${task.start_date || '—'}</td>
                   <td>${task.end_date || '—'}</td>
-                 </tr>
+                </tr>
               `).join('') : '<tr><td colspan="4" class="text-center">No tasks available</td></tr>'}
             </tbody>
           </table>
@@ -1218,6 +1226,7 @@
     bootstrap.Modal.getInstance(document.getElementById('addMemberModal')).hide();
   });
 
+  // Open edit task modal
   window.openEditTaskModal = async (projectId, taskId) => {
     const project = projectsData.find(p => p.id === projectId);
     const task = project?.tasks?.find(t => t.id === taskId);
@@ -1239,7 +1248,7 @@
           <div class="card">
             <img src="/uploads/${media.filename}" class="card-img-top" style="height: 100px; object-fit: cover;" onerror="this.src='https://via.placeholder.com/100'">
             <div class="card-body p-1">
-              <small class="text-muted">${media.filename}</small>
+              <small class="text-muted">${escapeHtml(media.filename)}</small>
             </div>
           </div>
         </div>
@@ -1251,6 +1260,7 @@
     new bootstrap.Modal(document.getElementById('editTaskModal')).show();
   };
   
+  // Edit task form submission
   document.getElementById('editTaskForm')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const taskId = parseInt(document.getElementById('editTaskId').value);
@@ -1292,7 +1302,7 @@
     }
   });
   
-  // Sync progress slider
+  // Sync progress slider with number input
   const progressSlider = document.getElementById('editTaskProgressSlider');
   const progressInput = document.getElementById('editTaskProgress');
   if (progressSlider && progressInput) {
