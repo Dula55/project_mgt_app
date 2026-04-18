@@ -594,7 +594,6 @@
       <div class="modal-body" id="reportModalBody"></div>
       <div class="modal-footer bg-light">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-        <button type="button" class="btn btn-primary" id="printReportBtn"><i class="bi bi-printer"></i> Print / Save PDF</button>
         <button type="button" class="btn btn-success" id="exportReportPDFBtn"><i class="bi bi-file-pdf"></i> Export as PDF</button>
       </div>
     </div>
@@ -621,6 +620,21 @@
 <script>
   let projectsData = [];
   let syncInProgress = false;
+
+  function showToast(message, type = 'info') {
+    const toastContainer = document.querySelector('.toast-notification') || (() => {
+      const div = document.createElement('div');
+      div.className = 'toast-notification';
+      document.body.appendChild(div);
+      return div;
+    })();
+    
+    const bgColor = type === 'success' ? '#10b981' : type === 'danger' ? '#ef4444' : '#3b82f6';
+    toastContainer.innerHTML = `<div class="alert alert-${type} mb-0 shadow-lg" style="background: ${bgColor}; color: white; border: none;">${message}</div>`;
+    setTimeout(() => {
+      toastContainer.innerHTML = '';
+    }, 3000);
+  }
 
   // Load data from server on page load
   async function loadProjectsFromServer() {
@@ -784,6 +798,13 @@
     } else {
       showToast('Failed to update progress', 'danger');
     }
+  }
+
+  function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
   }
 
   // Render functions remain similar but use server data
@@ -991,6 +1012,66 @@
     }
   }
 
+  function openReport(projectId) {
+    const project = projectsData.find(p => p.id === projectId);
+    if (!project) return;
+    
+    const modalBody = document.getElementById('reportModalBody');
+    modalBody.innerHTML = `
+      <div class="report-wrap p-3">
+        <div class="text-center mb-4">
+          <h2>${escapeHtml(project.name)}</h2>
+          <p class="text-muted">Project Report - ${new Date().toLocaleDateString()}</p>
+          <hr>
+        </div>
+        <div class="row mb-4">
+          <div class="col-md-4">
+            <div class="report-stat-badge text-center">
+              <h4>${project.completion || 0}%</h4>
+              <small>Overall Completion</small>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="report-stat-badge text-center">
+              <h4>${project.tasks ? project.tasks.length : 0}</h4>
+              <small>Total Tasks</small>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="report-stat-badge text-center">
+              <h4>${project.tasks ? project.tasks.filter(t => t.progress === 100).length : 0}</h4>
+              <small>Completed Tasks</small>
+            </div>
+          </div>
+        </div>
+        <h5>Task Details</h5>
+        <div class="table-responsive">
+          <table class="table table-sm">
+            <thead>
+              <tr><th>Task Name</th><th>Progress</th><th>Start Date</th><th>End Date</th></tr>
+            </thead>
+            <tbody>
+              ${project.tasks ? project.tasks.map(task => `
+                <tr>
+                  <td>${escapeHtml(task.name)}</td>
+                  <td>
+                    <div class="progress" style="height: 20px;">
+                      <div class="progress-bar" style="width: ${task.progress || 0}%">${task.progress || 0}%</div>
+                    </div>
+                  </td>
+                  <td>${task.start_date || '—'}</td>
+                  <td>${task.end_date || '—'}</td>
+                </tr>
+              `).join('') : '<tr><td colspan="4" class="text-center">No tasks available</td></tr>'}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+    
+    new bootstrap.Modal(document.getElementById('reportModal')).show();
+  }
+
   // Form submission handlers
   document.getElementById('addProjectForm')?.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -1035,6 +1116,142 @@
     } else {
       showToast("Failed to update project", "danger");
     }
+  });
+
+  window.openEditTaskModal = async (projectId, taskId) => {
+    const project = projectsData.find(p => p.id === projectId);
+    const task = project?.tasks?.find(t => t.id === taskId);
+    if (!task) return;
+    
+    document.getElementById('editTaskId').value = taskId;
+    document.getElementById('editTaskProjectId').value = projectId;
+    document.getElementById('editTaskName').value = task.name;
+    document.getElementById('editTaskProgress').value = task.progress || 0;
+    document.getElementById('editTaskProgressSlider').value = task.progress || 0;
+    document.getElementById('editTaskStartDate').value = task.start_date || '';
+    document.getElementById('editTaskEndDate').value = task.end_date || '';
+    
+    // Show current media
+    const mediaList = document.getElementById('currentMediaList');
+    if (task.media && task.media.length > 0) {
+      mediaList.innerHTML = task.media.map(media => `
+        <div class="col-6 col-md-4">
+          <div class="card">
+            <img src="/uploads/${media.filename}" class="card-img-top" style="height: 100px; object-fit: cover;" onerror="this.src='https://via.placeholder.com/100'">
+            <div class="card-body p-1">
+              <small class="text-muted">${media.filename}</small>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    } else {
+      mediaList.innerHTML = '<p class="text-muted">No media files attached</p>';
+    }
+    
+    new bootstrap.Modal(document.getElementById('editTaskModal')).show();
+  };
+  
+  document.getElementById('editTaskForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const taskId = parseInt(document.getElementById('editTaskId').value);
+    const projectId = parseInt(document.getElementById('editTaskProjectId').value);
+    
+    const taskData = {
+      name: document.getElementById('editTaskName').value,
+      progress: parseInt(document.getElementById('editTaskProgress').value),
+      start_date: document.getElementById('editTaskStartDate').value,
+      end_date: document.getElementById('editTaskEndDate').value
+    };
+    
+    const success = await updateTaskOnServer(taskId, taskData);
+    
+    // Upload media if any
+    const imageFiles = document.getElementById('modalImageInput').files;
+    const videoFiles = document.getElementById('modalVideoInput').files;
+    
+    if (imageFiles.length > 0 || videoFiles.length > 0) {
+      const formData = new FormData();
+      for (let file of imageFiles) {
+        formData.append('images', file);
+      }
+      for (let file of videoFiles) {
+        formData.append('videos', file);
+      }
+      await uploadMedia(taskId, formData);
+    }
+    
+    if (success) {
+      bootstrap.Modal.getInstance(document.getElementById('editTaskModal')).hide();
+      showToast("Task updated", "success");
+    } else {
+      showToast("Failed to update task", "danger");
+    }
+  });
+  
+  // Sync progress slider
+  const progressSlider = document.getElementById('editTaskProgressSlider');
+  const progressInput = document.getElementById('editTaskProgress');
+  if (progressSlider && progressInput) {
+    progressSlider.addEventListener('input', () => {
+      progressInput.value = progressSlider.value;
+    });
+    progressInput.addEventListener('input', () => {
+      progressSlider.value = progressInput.value;
+    });
+  }
+  
+  // Global search
+  document.getElementById('globalSearch')?.addEventListener('input', (e) => {
+    renderProjects(e.target.value);
+  });
+  
+  // Mobile menu toggle
+  const mobileMenuToggle = document.getElementById('mobileMenuToggle');
+  const sidebar = document.getElementById('sidebar');
+  const mobileOverlay = document.getElementById('mobileOverlay');
+  
+  if (mobileMenuToggle) {
+    mobileMenuToggle.addEventListener('click', () => {
+      sidebar.classList.toggle('mobile-open');
+      mobileOverlay.classList.toggle('active');
+    });
+  }
+  
+  if (mobileOverlay) {
+    mobileOverlay.addEventListener('click', () => {
+      sidebar.classList.remove('mobile-open');
+      mobileOverlay.classList.remove('active');
+    });
+  }
+  
+  // Print report
+  document.getElementById('printReportBtn')?.addEventListener('click', () => {
+    const reportContent = document.getElementById('reportModalBody').innerHTML;
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`
+      <html>
+        <head><title>Project Report</title>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+        <style>body{padding:20px}</style>
+        </head>
+        <body>${reportContent}</body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.print();
+  });
+  
+  // Export PDF
+  document.getElementById('exportReportPDFBtn')?.addEventListener('click', () => {
+    const element = document.getElementById('reportModalBody');
+    const opt = {
+      margin: 1,
+      filename: 'project_report.pdf',
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2 },
+      jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
+    };
+    html2pdf().set(opt).from(element).save();
   });
   
   // Load data on page load

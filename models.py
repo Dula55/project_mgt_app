@@ -30,7 +30,7 @@ class Project(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(255), nullable=False, index=True)
-    project_type = db.Column(db.String(50), nullable=False, index=True)
+    project_type = db.Column(db.String(50), default="General", nullable=False, index=True)
 
     start_date = db.Column(db.Date, nullable=True)
     end_date = db.Column(db.Date, nullable=True)
@@ -122,6 +122,7 @@ class Task(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
+    # FIXED: This is the correct relationship name - 'media_files'
     media_files = db.relationship(
         "MediaFile",
         backref="task",
