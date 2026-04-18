@@ -300,7 +300,6 @@ def api_projects():
             for p in projects:
                 tasks_list = []
                 for task in p.tasks:
-                    # FIXED: Use 'media_files' instead of 'media'
                     media_list = [{"id": m.id, "filename": m.filename, "filepath": m.filepath} for m in task.media_files]
                     tasks_list.append({
                         "id": task.id,
@@ -365,6 +364,7 @@ def api_projects():
             db.session.rollback()
             return jsonify({"success": False, "error": str(e)}), 500
 
+
 @app.route('/api/projects/<int:project_id>', methods=['PUT', 'DELETE'])
 @login_required
 def api_project_detail(project_id):
@@ -399,6 +399,7 @@ def api_project_detail(project_id):
             db.session.rollback()
             return jsonify({"success": False, "error": str(e)}), 500
 
+
 @app.route('/api/projects/<int:project_id>/tasks', methods=['POST'])
 @login_required
 def api_add_task(project_id):
@@ -421,6 +422,96 @@ def api_add_task(project_id):
         logger.error(f"Error in api_add_task: {e}")
         db.session.rollback()
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route('/api/projects/<int:project_id>/add_member', methods=['POST'])
+@login_required
+def api_add_project_member(project_id):
+    """Add a team member to a project"""
+    try:
+        project = Project.query.get_or_404(project_id)
+        data = request.get_json()
+        email = data.get('email', '').lower()
+        
+        # Check if user has admin role or is the project creator
+        user = User.query.get(session['user_id'])
+        is_admin = session.get('user_role') == 'admin'
+        
+        if not is_admin:
+            return jsonify({"success": False, "error": "Only admin can add members"}), 403
+        
+        # Find team member by email
+        team_member = TeamMember.query.filter_by(email=email).first()
+        if not team_member:
+            return jsonify({"success": False, "error": f"User with email {email} not found"}), 404
+        
+        # Add member to project if not already added
+        if team_member not in project.team_members:
+            project.team_members.append(team_member)
+            db.session.commit()
+            return jsonify({"success": True, "message": f"Added {email} to project"})
+        else:
+            return jsonify({"success": False, "error": "User already in project"}), 400
+            
+    except Exception as e:
+        logger.error(f"Error adding member to project: {e}")
+        db.session.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route('/api/projects/<int:project_id>/members', methods=['GET'])
+@login_required
+def api_get_project_members(project_id):
+    """Get all members of a project"""
+    try:
+        project = Project.query.get_or_404(project_id)
+        members = [{"id": m.id, "name": m.name, "email": m.email} for m in project.team_members]
+        return jsonify({"success": True, "members": members})
+    except Exception as e:
+        logger.error(f"Error getting project members: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route('/api/admin/all_projects', methods=['GET'])
+@login_required
+def api_admin_all_projects():
+    """Get all projects (admin only)"""
+    try:
+        if session.get('user_role') != 'admin':
+            return jsonify({"success": False, "error": "Admin access required"}), 403
+        
+        projects = Project.query.all()
+        projects_list = []
+        for p in projects:
+            projects_list.append({
+                "id": p.id,
+                "name": p.name,
+                "project_type": getattr(p, 'project_type', 'General'),
+                "member_count": len(p.team_members)
+            })
+        
+        return jsonify({"success": True, "projects": projects_list})
+    except Exception as e:
+        logger.error(f"Error in api_admin_all_projects: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route('/api/admin/all_users', methods=['GET'])
+@login_required
+def api_admin_all_users():
+    """Get all users (admin only) for assignment"""
+    try:
+        if session.get('user_role') != 'admin':
+            return jsonify({"success": False, "error": "Admin access required"}), 403
+        
+        users = User.query.all()
+        users_list = [{"id": u.id, "name": u.name, "email": u.email, "role": u.role} for u in users]
+        
+        return jsonify({"success": True, "users": users_list})
+    except Exception as e:
+        logger.error(f"Error in api_admin_all_users: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
 
 @app.route('/api/tasks/<int:task_id>', methods=['PUT', 'DELETE'])
 @login_required
@@ -455,6 +546,7 @@ def api_task_detail(task_id):
             logger.error(f"Error in api_task_detail DELETE: {e}")
             db.session.rollback()
             return jsonify({"success": False, "error": str(e)}), 500
+
 
 @app.route('/api/tasks/<int:task_id>/media', methods=['POST'])
 @login_required

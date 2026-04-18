@@ -186,6 +186,8 @@
     .project-action-btn.delete-btn:hover { background: rgba(239,68,68,0.05); }
     .project-action-btn.report-btn { color: #0d9488; border-color: rgba(13,148,136,0.25); }
     .project-action-btn.report-btn:hover { background: rgba(13,148,136,0.05); border-color: #0d9488; }
+    .add-member-btn { color: #10b981; border-color: rgba(16, 185, 129, 0.25); }
+    .add-member-btn:hover { background: rgba(16, 185, 129, 0.05); border-color: #10b981; }
 
     .task-item {
       background: #fefefe; border-radius: 1rem; padding: 0.9rem; margin-bottom: 0.75rem; border: 1px solid #edf2f7; transition: all 0.2s ease;
@@ -594,6 +596,7 @@
       <div class="modal-body" id="reportModalBody"></div>
       <div class="modal-footer bg-light">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-primary" id="printReportBtn"><i class="bi bi-printer"></i> Print / Save PDF</button>
         <button type="button" class="btn btn-success" id="exportReportPDFBtn"><i class="bi bi-file-pdf"></i> Export as PDF</button>
       </div>
     </div>
@@ -611,6 +614,34 @@
   </div>
 </div>
 
+<!-- Add Member to Project Modal -->
+<div class="modal fade" id="addMemberModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header bg-light">
+        <h5 class="modal-title fw-bold"><i class="bi bi-person-plus me-2"></i>Add Team Member to Project</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="addMemberProjectId">
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Select User</label>
+          <select id="memberUserSelect" class="form-select">
+            <option value="">Loading users...</option>
+          </select>
+        </div>
+        <div class="alert alert-info">
+          <i class="bi bi-info-circle"></i> Only admin users can add team members to projects.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="confirmAddMemberBtn">Add Member</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <button class="fab-mobile" id="mobileFab" data-bs-toggle="modal" data-bs-target="#addProjectModal" aria-label="Add project"><i class="bi bi-plus-lg fs-4"></i></button>
 
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
@@ -620,6 +651,7 @@
 <script>
   let projectsData = [];
   let syncInProgress = false;
+  const userRole = '{{ session.get("user_role", "team_member") }}';
 
   function showToast(message, type = 'info') {
     const toastContainer = document.querySelector('.toast-notification') || (() => {
@@ -807,6 +839,46 @@
     return div.innerHTML;
   }
 
+  // Admin functions to add team members to projects
+  async function loadAllUsers() {
+    try {
+      const response = await fetch('/api/admin/all_users');
+      const data = await response.json();
+      if (data.success) {
+        const select = document.getElementById('memberUserSelect');
+        select.innerHTML = '<option value="">Select a user...</option>';
+        data.users.forEach(user => {
+          select.innerHTML += `<option value="${user.email}">${user.name} (${user.email}) - ${user.role}</option>`;
+        });
+      }
+    } catch (error) {
+      console.error('Error loading users:', error);
+    }
+  }
+
+  async function addMemberToProject(projectId, email) {
+    try {
+      const response = await fetch(`/api/projects/${projectId}/add_member`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email })
+      });
+      const data = await response.json();
+      if (data.success) {
+        showToast(data.message, 'success');
+        await loadProjectsFromServer(); // Refresh to show updated projects for all users
+        return true;
+      } else {
+        showToast(data.error, 'danger');
+        return false;
+      }
+    } catch (error) {
+      console.error('Error adding member:', error);
+      showToast('Failed to add member', 'danger');
+      return false;
+    }
+  }
+
   // Render functions remain similar but use server data
   function updateStats() {
     let total = projectsData.length;
@@ -887,6 +959,7 @@
           <div class="project-actions">
             <button class="project-action-btn edit-project-btn" data-id="${proj.id}"><i class="bi bi-pencil"></i> Edit</button>
             <button class="project-action-btn report-btn" data-report-id="${proj.id}"><i class="bi bi-file-text"></i> Report</button>
+            ${userRole === 'admin' ? `<button class="project-action-btn add-member-btn" data-id="${proj.id}"><i class="bi bi-person-plus"></i> Add Member</button>` : ''}
             <button class="project-action-btn delete-project-btn text-danger" data-id="${proj.id}"><i class="bi bi-trash"></i> Delete</button>
           </div>
         </div>
@@ -951,6 +1024,19 @@
         e.preventDefault();
         const projectId = parseInt(btn.dataset.reportId);
         openReport(projectId);
+      };
+    });
+    
+    // Add member button handler
+    document.querySelectorAll('.add-member-btn').forEach(btn => {
+      btn.onclick = async () => {
+        const projectId = parseInt(btn.dataset.id);
+        const project = projectsData.find(p => p.id === projectId);
+        if (project) {
+          document.getElementById('addMemberProjectId').value = projectId;
+          await loadAllUsers();
+          new bootstrap.Modal(document.getElementById('addMemberModal')).show();
+        }
       };
     });
   }
@@ -1058,10 +1144,10 @@
                     <div class="progress" style="height: 20px;">
                       <div class="progress-bar" style="width: ${task.progress || 0}%">${task.progress || 0}%</div>
                     </div>
-                  </td>
+                   </td>
                   <td>${task.start_date || '—'}</td>
                   <td>${task.end_date || '—'}</td>
-                </tr>
+                 </tr>
               `).join('') : '<tr><td colspan="4" class="text-center">No tasks available</td></tr>'}
             </tbody>
           </table>
@@ -1117,6 +1203,20 @@
       showToast("Failed to update project", "danger");
     }
   });
+  
+  // Add confirm add member button handler
+  document.getElementById('confirmAddMemberBtn')?.addEventListener('click', async () => {
+    const projectId = parseInt(document.getElementById('addMemberProjectId').value);
+    const email = document.getElementById('memberUserSelect').value;
+    
+    if (!email) {
+      showToast('Please select a user', 'danger');
+      return;
+    }
+    
+    await addMemberToProject(projectId, email);
+    bootstrap.Modal.getInstance(document.getElementById('addMemberModal')).hide();
+  });
 
   window.openEditTaskModal = async (projectId, taskId) => {
     const project = projectsData.find(p => p.id === projectId);
@@ -1154,7 +1254,6 @@
   document.getElementById('editTaskForm')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const taskId = parseInt(document.getElementById('editTaskId').value);
-    const projectId = parseInt(document.getElementById('editTaskProjectId').value);
     
     const taskData = {
       name: document.getElementById('editTaskName').value,
@@ -1183,6 +1282,11 @@
     if (success) {
       bootstrap.Modal.getInstance(document.getElementById('editTaskModal')).hide();
       showToast("Task updated", "success");
+      // Clear file inputs
+      document.getElementById('modalImageInput').value = '';
+      document.getElementById('modalVideoInput').value = '';
+      document.getElementById('modalImagePreview').innerHTML = '';
+      document.getElementById('modalVideoPreview').innerHTML = '';
     } else {
       showToast("Failed to update task", "danger");
     }
