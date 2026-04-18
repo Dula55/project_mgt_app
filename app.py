@@ -182,7 +182,11 @@ def dashboard():
         db.session.add(tm)
         db.session.commit()
     
-    projects = tm.projects if tm else []
+    # For admin, show all projects; for team members, show only their projects
+    if session.get('user_role') == 'admin':
+        projects = Project.query.all()
+    else:
+        projects = tm.projects if tm else []
     return render_template('index.html', projects=projects)
 
 # ================= PROJECT =================
@@ -303,8 +307,13 @@ def api_projects():
         try:
             user = User.query.get(session['user_id'])
             tm = TeamMember.query.filter_by(email=user.email).first()
-            # Get projects where user is a team member
-            projects = tm.projects if tm else []
+            
+            # For admin, return all projects; for team members, return only their projects
+            if session.get('user_role') == 'admin':
+                projects = Project.query.all()
+            else:
+                projects = tm.projects if tm else []
+            
             projects_list = []
             for p in projects:
                 tasks_list = []
@@ -331,7 +340,8 @@ def api_projects():
                     "start_date": p.start_date.strftime("%Y-%m-%d") if p.start_date else None,
                     "end_date": p.end_date.strftime("%Y-%m-%d") if p.end_date else None,
                     "completion": completion,
-                    "tasks": tasks_list
+                    "tasks": tasks_list,
+                    "created_by": p.created_by_email if hasattr(p, 'created_by_email') else None
                 })
             
             return jsonify({"success": True, "projects": projects_list})
@@ -351,20 +361,33 @@ def api_projects():
             if not name:
                 return jsonify({"success": False, "error": "Project name required"}), 400
             
+            user = User.query.get(session['user_id'])
+            tm = TeamMember.query.filter_by(email=user.email).first()
+            
             project = Project(
                 name=name,
                 project_type=project_type,
                 start_date=start_date,
                 end_date=end_date
             )
+            
+            # Add created_by attribute if it exists in the model
+            if hasattr(project, 'created_by_email'):
+                project.created_by_email = user.email
+            
             db.session.add(project)
             db.session.flush()
             
             # Add the current user as a team member to the project
-            user = User.query.get(session['user_id'])
-            tm = TeamMember.query.filter_by(email=user.email).first()
             if tm:
                 project.team_members.append(tm)
+            
+            # If admin is creating project, add all team members automatically
+            if session.get('user_role') == 'admin':
+                all_members = TeamMember.query.all()
+                for member in all_members:
+                    if member not in project.team_members:
+                        project.team_members.append(member)
             
             db.session.commit()
             
@@ -383,7 +406,7 @@ def api_project_detail(project_id):
     # Check if user has access to this project
     user = User.query.get(session['user_id'])
     tm = TeamMember.query.filter_by(email=user.email).first()
-    if tm not in project.team_members and session.get('user_role') != 'admin':
+    if session.get('user_role') != 'admin' and (not tm or tm not in project.team_members):
         return jsonify({"success": False, "error": "Access denied"}), 403
     
     if request.method == 'PUT':
@@ -429,7 +452,7 @@ def api_add_task(project_id):
         # Check if user has access to this project
         user = User.query.get(session['user_id'])
         tm = TeamMember.query.filter_by(email=user.email).first()
-        if tm not in project.team_members and session.get('user_role') != 'admin':
+        if session.get('user_role') != 'admin' and (not tm or tm not in project.team_members):
             return jsonify({"success": False, "error": "Access denied"}), 403
         
         data = request.get_json()
@@ -547,7 +570,7 @@ def api_task_detail(task_id):
     # Check if user has access to this task's project
     user = User.query.get(session['user_id'])
     tm = TeamMember.query.filter_by(email=user.email).first()
-    if tm not in task.project.team_members and session.get('user_role') != 'admin':
+    if session.get('user_role') != 'admin' and (not tm or tm not in task.project.team_members):
         return jsonify({"success": False, "error": "Access denied"}), 403
     
     if request.method == 'PUT':
@@ -589,7 +612,7 @@ def api_upload_media(task_id):
         # Check if user has access to this task's project
         user = User.query.get(session['user_id'])
         tm = TeamMember.query.filter_by(email=user.email).first()
-        if tm not in task.project.team_members and session.get('user_role') != 'admin':
+        if session.get('user_role') != 'admin' and (not tm or tm not in task.project.team_members):
             return jsonify({"success": False, "error": "Access denied"}), 403
         
         if 'images' in request.files:
@@ -618,6 +641,7 @@ def api_upload_media(task_id):
         logger.error(f"Error in api_upload_media: {e}")
         db.session.rollback()
         return jsonify({"success": False, "error": str(e)}), 500
+
 
 # ================= SCHEDULER JOB =================
 def weekly_reports():
