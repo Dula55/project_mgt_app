@@ -670,15 +670,18 @@
     }, 3000);
   }
 
-  // Load data from server on page load
+  // Load data from server on page load - UPDATED to use /api/my_projects
   async function loadProjectsFromServer() {
     try {
-      const response = await fetch('/api/projects');
+      const response = await fetch('/api/my_projects');
       const data = await response.json();
       if (data.success) {
         projectsData = data.projects;
         renderProjects('');
         showToast('Projects synced from server', 'success');
+      } else {
+        console.error('API returned error:', data.error);
+        showToast('Failed to load projects: ' + (data.error || 'Unknown error'), 'danger');
       }
     } catch (error) {
       console.error('Error loading projects:', error);
@@ -1152,7 +1155,7 @@
                     <div class="progress" style="height: 20px;">
                       <div class="progress-bar" style="width: ${task.progress || 0}%">${task.progress || 0}%</div>
                     </div>
-                  </td>
+                   </td>
                   <td>${task.start_date || '—'}</td>
                   <td>${task.end_date || '—'}</td>
                 </tr>

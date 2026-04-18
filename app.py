@@ -182,11 +182,24 @@ def dashboard():
         db.session.add(tm)
         db.session.commit()
     
-    # For admin, show all projects; for team members, show only their projects
+    # Get all projects the user has access to (both as team member and creator)
+    projects_set = set()
+    
+    # Add projects where user is a team member
+    if tm and tm.projects:
+        projects_set.update(tm.projects)
+    
+    # Add projects created by this user (if the field exists)
+    if hasattr(Project, 'created_by_email'):
+        created_projects = Project.query.filter_by(created_by_email=user.email).all()
+        projects_set.update(created_projects)
+    
+    # For admin, show all projects
     if session.get('user_role') == 'admin':
-        projects = Project.query.all()
-    else:
-        projects = tm.projects if tm else []
+        projects_set = set(Project.query.all())
+    
+    projects = list(projects_set)
+    
     return render_template('index.html', projects=projects)
 
 # ================= PROJECT =================
@@ -195,13 +208,22 @@ def dashboard():
 def add_project():
     name = request.form['name']
     p = Project(name=name)
-    db.session.add(p)
-
+    
     user = User.query.get(session['user_id'])
     tm = TeamMember.query.filter_by(email=user.email).first()
+    
+    # Always add the creator as a team member if they're a team member
     if tm:
         p.team_members.append(tm)
-
+    
+    # If admin is creating project, add all team members automatically
+    if session.get('user_role') == 'admin':
+        all_members = TeamMember.query.all()
+        for member in all_members:
+            if member not in p.team_members:
+                p.team_members.append(member)
+    
+    db.session.add(p)
     db.session.commit()
     return redirect(url_for('dashboard'))
 
@@ -300,57 +322,10 @@ def report(id):
                      download_name=f"project_{p.name}_report.pdf")
 
 # ================= API =================
-@app.route('/api/projects', methods=['GET', 'POST'])
+@app.route('/api/projects', methods=['POST'])
 @login_required
 def api_projects():
-    if request.method == 'GET':
-        try:
-            user = User.query.get(session['user_id'])
-            tm = TeamMember.query.filter_by(email=user.email).first()
-            
-            # For admin, return all projects; for team members, return only their projects
-            if session.get('user_role') == 'admin':
-                projects = Project.query.all()
-            else:
-                projects = tm.projects if tm else []
-            
-            projects_list = []
-            for p in projects:
-                tasks_list = []
-                for task in p.tasks:
-                    media_list = [{"id": m.id, "filename": m.filename, "filepath": m.filepath} for m in task.media_files]
-                    tasks_list.append({
-                        "id": task.id,
-                        "name": task.name,
-                        "progress": task.progress,
-                        "start_date": task.start_date.strftime("%Y-%m-%d") if task.start_date else None,
-                        "end_date": task.end_date.strftime("%Y-%m-%d") if task.end_date else None,
-                        "media": media_list
-                    })
-                
-                # Calculate project completion
-                completion = 0
-                if tasks_list:
-                    completion = sum(t.get('progress', 0) for t in tasks_list) // len(tasks_list)
-                
-                projects_list.append({
-                    "id": p.id,
-                    "name": p.name,
-                    "project_type": getattr(p, 'project_type', 'General'),
-                    "start_date": p.start_date.strftime("%Y-%m-%d") if p.start_date else None,
-                    "end_date": p.end_date.strftime("%Y-%m-%d") if p.end_date else None,
-                    "completion": completion,
-                    "tasks": tasks_list,
-                    "created_by": p.created_by_email if hasattr(p, 'created_by_email') else None
-                })
-            
-            return jsonify({"success": True, "projects": projects_list})
-        except Exception as e:
-            logger.error(f"Error in api_projects GET: {e}")
-            db.session.rollback()
-            return jsonify({"success": False, "error": str(e)}), 500
-    
-    elif request.method == 'POST':
+    if request.method == 'POST':
         try:
             data = request.get_json()
             name = data.get('name')
@@ -378,7 +353,7 @@ def api_projects():
             db.session.add(project)
             db.session.flush()
             
-            # Add the current user as a team member to the project
+            # Always add the creator as a team member
             if tm:
                 project.team_members.append(tm)
             
@@ -396,6 +371,65 @@ def api_projects():
             logger.error(f"Error in api_projects POST: {e}")
             db.session.rollback()
             return jsonify({"success": False, "error": str(e)}), 500
+
+# Add a new route to ensure team members can see projects they created
+@app.route('/api/my_projects', methods=['GET'])
+@login_required
+def api_my_projects():
+    """Get projects for the current user (including ones they created)"""
+    try:
+        user = User.query.get(session['user_id'])
+        tm = TeamMember.query.filter_by(email=user.email).first()
+        
+        projects = set()
+        
+        # Get projects where user is explicitly a team member
+        if tm and tm.projects:
+            projects.update(tm.projects)
+        
+        # Get projects created by this user (if created_by_email exists in model)
+        if hasattr(Project, 'created_by_email'):
+            created_projects = Project.query.filter_by(created_by_email=user.email).all()
+            projects.update(created_projects)
+        
+        # For admin, get all projects
+        if session.get('user_role') == 'admin':
+            projects = set(Project.query.all())
+        
+        projects_list = []
+        for p in projects:
+            tasks_list = []
+            for task in p.tasks:
+                media_list = [{"id": m.id, "filename": m.filename, "filepath": m.filepath} for m in task.media_files]
+                tasks_list.append({
+                    "id": task.id,
+                    "name": task.name,
+                    "progress": task.progress,
+                    "start_date": task.start_date.strftime("%Y-%m-%d") if task.start_date else None,
+                    "end_date": task.end_date.strftime("%Y-%m-%d") if task.end_date else None,
+                    "media": media_list
+                })
+            
+            # Calculate project completion
+            completion = 0
+            if tasks_list:
+                completion = sum(t.get('progress', 0) for t in tasks_list) // len(tasks_list)
+            
+            projects_list.append({
+                "id": p.id,
+                "name": p.name,
+                "project_type": getattr(p, 'project_type', 'General'),
+                "start_date": p.start_date.strftime("%Y-%m-%d") if p.start_date else None,
+                "end_date": p.end_date.strftime("%Y-%m-%d") if p.end_date else None,
+                "completion": completion,
+                "tasks": tasks_list,
+                "created_by": p.created_by_email if hasattr(p, 'created_by_email') else None
+            })
+        
+        return jsonify({"success": True, "projects": projects_list})
+    except Exception as e:
+        logger.error(f"Error in api_my_projects: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 @app.route('/api/projects/<int:project_id>', methods=['PUT', 'DELETE'])
