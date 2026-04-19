@@ -699,6 +699,120 @@ def api_add_project_member(project_id):
         db.session.rollback()
         return jsonify({"success": False, "error": str(e)}), 500
 
+
+@app.route('/api/my_projects', methods=['GET'])
+def my_projects():
+    try:
+        if 'user_id' not in session and 'member_id' not in session:
+            return jsonify({
+                "success": False,
+                "error": "Unauthorized"
+            }), 401
+
+        user_id = session.get('user_id') or session.get('member_id')
+        user_email = session.get('user_email')
+        user_role = session.get('user_role')
+
+        include_trashed = request.args.get('include_trashed', '0') == '1'
+        include_shared = request.args.get('include_shared', '0') == '1'
+
+        # -------------------------
+        # GET CURRENT USER OBJECT
+        # -------------------------
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({"success": False, "error": "User not found"}), 404
+
+        # -------------------------
+        # BASE QUERY
+        # -------------------------
+        query = Project.query
+
+        # -------------------------
+        # CORE ACCESS RULES
+        # -------------------------
+        if user_role == 'admin':
+            # Admin sees ALL projects
+            projects = query.all()
+
+        else:
+            # Team member access rules:
+            # 1. Projects they created
+            # 2. Projects they are assigned to (shared)
+            # 3. Optional email-based fallback (important for legacy data)
+
+            if include_shared:
+                projects = query.filter(
+                    (Project.owner_id == user_id) |
+                    (Project.members.any(id=user_id)) |
+                    (Project.members.any(email=user_email))
+                ).all()
+            else:
+                # strict mode (only own projects)
+                projects = query.filter(Project.owner_id == user_id).all()
+
+        # -------------------------
+        # TRASHED PROJECTS
+        # -------------------------
+        trashed_projects = []
+        if include_trashed:
+            if user_role == 'admin':
+                trashed_projects = Project.query.filter_by(is_deleted=True).all()
+            else:
+                trashed_projects = Project.query.filter(
+                    Project.is_deleted == True,
+                    (
+                        (Project.owner_id == user_id) |
+                        (Project.members.any(id=user_id)) |
+                        (Project.members.any(email=user_email))
+                    )
+                ).all()
+
+        # -------------------------
+        # SERIALIZE RESPONSE
+        # -------------------------
+        def serialize_project(p):
+            return {
+                "id": p.id,
+                "name": p.name,
+                "project_type": p.project_type,
+                "start_date": p.start_date.isoformat() if p.start_date else None,
+                "end_date": p.end_date.isoformat() if p.end_date else None,
+                "completion": getattr(p, "completion", 0),
+
+                "owner_id": p.owner_id,
+                "created_by": getattr(p.owner, "name", "Unknown") if hasattr(p, "owner") else None,
+
+                # IMPORTANT FOR FRONTEND DEBUGGING
+                "is_member": any(m.id == user_id or m.email == user_email for m in p.members),
+
+                "tasks": [
+                    {
+                        "id": t.id,
+                        "name": t.name,
+                        "progress": t.progress,
+                        "start_date": t.start_date.isoformat() if t.start_date else None,
+                        "end_date": t.end_date.isoformat() if t.end_date else None
+                    }
+                    for t in p.tasks
+                ]
+            }
+
+        return jsonify({
+            "success": True,
+            "projects": [serialize_project(p) for p in projects],
+            "trashed_projects": [serialize_project(p) for p in trashed_projects]
+        })
+
+    except Exception as e:
+        print("my_projects error:", str(e))
+        return jsonify({
+            "success": False,
+            "error": "Server error",
+            "details": str(e)
+        }), 500
+
+
 @app.route('/api/admin/all_users', methods=['GET'])
 @login_required
 def api_admin_all_users():
