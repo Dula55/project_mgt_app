@@ -498,7 +498,13 @@
   let trashedProjectsData = [];
   let syncInProgress = false;
   let currentSearchText = '';
+  
+  // FIXED: Get user role properly from session
   const userRole = '{{ session.get("user_role", "team_member") }}';
+  const userEmail = '{{ session.get("user_email", "") }}';
+  
+  console.log('User Role:', userRole);
+  console.log('User Email:', userEmail);
 
   function showToast(message, type = 'info', options = {}) {
     const toastContainer = document.querySelector('.toast-notification') || (() => {
@@ -513,8 +519,58 @@
     setTimeout(() => toastContainer.innerHTML = '', options.duration || 4500);
   }
 
-  function updateTrashBadge() { const badge = document.getElementById('trashCountBadge'); if (badge) badge.innerText = trashedProjectsData.length; }
-  function renderTrashProjects() { /* same as original but omitted brevity - full feature */ updateTrashBadge(); }
+  function updateTrashBadge() { 
+    const badge = document.getElementById('trashCountBadge'); 
+    if (badge) badge.innerText = trashedProjectsData.length; 
+  }
+  
+  function renderTrashProjects() { 
+    const container = document.getElementById('trashModalBody');
+    if (!container) return;
+    
+    if (trashedProjectsData.length === 0) {
+      container.innerHTML = '<div class="text-center p-4"><i class="bi bi-trash fs-1 text-muted"></i><p class="mt-2">No trashed projects</p></div>';
+      return;
+    }
+    
+    let html = '<div class="list-group">';
+    trashedProjectsData.forEach(proj => {
+      html += `
+        <div class="list-group-item">
+          <div class="d-flex justify-content-between align-items-center">
+            <div>
+              <h6 class="mb-1">${escapeHtml(proj.name)}</h6>
+              <small class="text-muted">Type: ${escapeHtml(proj.project_type)}</small>
+            </div>
+            <div>
+              <button class="btn btn-sm btn-success restore-trash-btn" data-id="${proj.id}">
+                <i class="bi bi-arrow-counterclockwise"></i> Restore
+              </button>
+              <button class="btn btn-sm btn-danger permanent-delete-btn" data-id="${proj.id}">
+                <i class="bi bi-trash"></i> Delete Permanently
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+    });
+    html += '</div>';
+    container.innerHTML = html;
+    
+    // Attach event listeners
+    document.querySelectorAll('.restore-trash-btn').forEach(btn => {
+      btn.onclick = () => restoreProjectOnServer(parseInt(btn.dataset.id));
+    });
+    document.querySelectorAll('.permanent-delete-btn').forEach(btn => {
+      btn.onclick = () => {
+        if (confirm('Permanently delete this project? This action cannot be undone!')) {
+          permanentlyDeleteProjectOnServer(parseInt(btn.dataset.id));
+        }
+      };
+    });
+    
+    updateTrashBadge(); 
+  }
 
   // Correct TRASH endpoint calls (matches backend /api/projects/<id>/trash)
   async function deleteProjectOnServer(projectId) {
@@ -526,6 +582,7 @@
       const data = await response.json();
       if (data.success) {
         await loadProjectsFromServer();
+        showToast('Project moved to trash', 'success');
         return true;
       }
       showToast(data.error || 'Failed to move to trash', 'danger');
@@ -538,21 +595,42 @@
 
   async function restoreProjectOnServer(projectId) {
     try {
-      const response = await fetch(`/api/projects/${projectId}/restore`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+      const response = await fetch(`/api/projects/${projectId}/restore`, { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' } 
+      });
       const data = await response.json();
-      if (data.success) { await loadProjectsFromServer(); showToast('Project restored', 'success'); return true; }
+      if (data.success) { 
+        await loadProjectsFromServer(); 
+        showToast('Project restored', 'success');
+        // Close trash modal if open
+        const trashModal = bootstrap.Modal.getInstance(document.getElementById('trashModal'));
+        if (trashModal) trashModal.hide();
+        return true; 
+      }
       showToast(data.error || 'Restore failed', 'danger');
       return false;
-    } catch (error) { return false; }
+    } catch (error) { 
+      console.error('Restore error:', error);
+      return false; 
+    }
   }
 
   async function permanentlyDeleteProjectOnServer(projectId) {
     try {
       const response = await fetch(`/api/projects/${projectId}`, { method: 'DELETE' });
       const data = await response.json();
-      if (data.success) { await loadProjectsFromServer(); return true; }
+      if (data.success) { 
+        await loadProjectsFromServer(); 
+        showToast('Project permanently deleted', 'success');
+        return true; 
+      }
+      showToast(data.error || 'Delete failed', 'danger');
       return false;
-    } catch (error) { return false; }
+    } catch (error) { 
+      console.error('Permanent delete error:', error);
+      return false; 
+    }
   }
 
   async function loadProjectsFromServer() {
@@ -564,56 +642,213 @@
       if (data.success) {
         projectsData = Array.isArray(data.projects) ? data.projects : [];
         trashedProjectsData = Array.isArray(data.trashed_projects) ? data.trashed_projects : [];
+        console.log(`Loaded ${projectsData.length} active projects, ${trashedProjectsData.length} trashed projects`);
+        console.log('Projects:', projectsData.map(p => ({ id: p.id, name: p.name, created_by: p.created_by })));
         renderProjects(currentSearchText);
         updateTrashBadge();
         renderTrashProjects();
-      } else showToast('Failed load projects', 'danger');
-    } catch (e) { console.error(e); showToast('Server error', 'danger'); } finally { syncInProgress = false; }
+      } else {
+        showToast('Failed load projects: ' + (data.error || 'Unknown error'), 'danger');
+      }
+    } catch (e) { 
+      console.error('Load projects error:', e); 
+      showToast('Server error: ' + e.message, 'danger'); 
+    } finally { 
+      syncInProgress = false; 
+    }
   }
 
   async function createProjectOnServer(projectData) {
-    const res = await fetch('/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(projectData) });
-    if (res.ok) { await loadProjectsFromServer(); return true; }
-    return false;
+    try {
+      const res = await fetch('/api/projects', { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify(projectData) 
+      });
+      const data = await res.json();
+      if (data.success) { 
+        await loadProjectsFromServer(); 
+        return true; 
+      }
+      showToast(data.error || 'Failed to create project', 'danger');
+      return false;
+    } catch (error) {
+      console.error('Create project error:', error);
+      showToast('Network error', 'danger');
+      return false;
+    }
   }
 
   async function updateProjectOnServer(id, data) {
-    const res = await fetch(`/api/projects/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
-    if (res.ok) { await loadProjectsFromServer(); return true; }
-    return false;
+    try {
+      const res = await fetch(`/api/projects/${id}`, { 
+        method: 'PUT', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify(data) 
+      });
+      const response = await res.json();
+      if (response.success) { 
+        await loadProjectsFromServer(); 
+        return true; 
+      }
+      showToast(response.error || 'Update failed', 'danger');
+      return false;
+    } catch (error) {
+      console.error('Update project error:', error);
+      return false;
+    }
   }
 
   async function updateTaskOnServer(taskId, taskData) {
-    const res = await fetch(`/api/tasks/${taskId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(taskData) });
-    return res.ok;
+    try {
+      const res = await fetch(`/api/tasks/${taskId}`, { 
+        method: 'PUT', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify(taskData) 
+      });
+      const data = await res.json();
+      return data.success;
+    } catch (error) {
+      console.error('Update task error:', error);
+      return false;
+    }
   }
 
   async function deleteTaskOnServer(taskId) {
-    const res = await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
-    if (res.ok) { await loadProjectsFromServer(); return true; }
-    return false;
+    try {
+      const res = await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) { 
+        await loadProjectsFromServer(); 
+        return true; 
+      }
+      return false;
+    } catch (error) {
+      console.error('Delete task error:', error);
+      return false;
+    }
   }
 
   async function addTaskToProject(projectId) {
-    const payload = { name: "New Task", start_date: new Date().toISOString().slice(0,10), end_date: new Date(Date.now()+12096e5).toISOString().slice(0,10), progress:0 };
-    const res = await fetch(`/api/projects/${projectId}/tasks`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-    if (res.ok) { await loadProjectsFromServer(); showToast('Task added', 'success'); }
+    const payload = { 
+      name: "New Task", 
+      start_date: new Date().toISOString().slice(0,10), 
+      end_date: new Date(Date.now()+12096e5).toISOString().slice(0,10), 
+      progress: 0 
+    };
+    try {
+      const res = await fetch(`/api/projects/${projectId}/tasks`, { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify(payload) 
+      });
+      const data = await res.json();
+      if (data.success) { 
+        await loadProjectsFromServer(); 
+        showToast('Task added', 'success'); 
+        return true;
+      }
+      showToast('Failed to add task', 'danger');
+      return false;
+    } catch (error) {
+      console.error('Add task error:', error);
+      return false;
+    }
   }
 
   async function updateTaskProgress(taskId, progress) {
-    if (await updateTaskOnServer(taskId, { progress })) { await loadProjectsFromServer(); showToast(`Progress ${progress}%`, 'success'); }
-    else showToast('Update failed', 'danger');
+    if (await updateTaskOnServer(taskId, { progress })) { 
+      await loadProjectsFromServer(); 
+      showToast(`Progress updated to ${progress}%`, 'success'); 
+    } else {
+      showToast('Update failed', 'danger');
+    }
   }
 
   function renderProjects(filter = "") {
     const container = document.getElementById('projectsContainer');
     if (!container) return;
-    let filtered = projectsData.filter(p => p.name.toLowerCase().includes(filter.toLowerCase()) || (p.tasks||[]).some(t=>t.name.toLowerCase().includes(filter.toLowerCase())));
-    if (filtered.length === 0) { container.innerHTML = `<div class="empty-state"><i class="bi bi-folder-plus"></i><h5>No projects</h5><button class="btn btn-primary create-project-empty-btn">Create Project</button></div>`; document.querySelector('.create-project-empty-btn')?.addEventListener('click',()=>new bootstrap.Modal(document.getElementById('addProjectModal')).show()); updateStats(); renderGanttChart(); return; }
+    
+    let filtered = projectsData.filter(p => 
+      p.name.toLowerCase().includes(filter.toLowerCase()) || 
+      (p.tasks || []).some(t => t.name.toLowerCase().includes(filter.toLowerCase()))
+    );
+    
+    if (filtered.length === 0) { 
+      container.innerHTML = `<div class="empty-state"><i class="bi bi-folder-plus"></i><h5>No projects found</h5><p>${filter ? 'Try a different search term' : 'Create your first project to get started'}</p><button class="btn btn-primary create-project-empty-btn">Create Project</button></div>`; 
+      document.querySelector('.create-project-empty-btn')?.addEventListener('click',() => new bootstrap.Modal(document.getElementById('addProjectModal')).show()); 
+      updateStats(); 
+      renderGanttChart(); 
+      return; 
+    }
+    
     let html = '';
     filtered.forEach(proj => {
-      let tasksHtml = (proj.tasks||[]).map(task => `<div class="task-item"><div class="d-flex justify-content-between"><strong>${escapeHtml(task.name)}</strong><div><button class="btn btn-sm btn-outline-warning edit-task-btn" onclick="openEditTaskModal(${proj.id},${task.id})">Edit</button> <button class="btn btn-sm btn-outline-danger delete-task-btn" data-taskid="${task.id}">🗑</button></div></div><div class="task-progress"><div class="progress w-75"><div class="progress-bar bg-success" style="width:${task.progress||0}%"></div></div><input type="number" class="task-progress-input" value="${task.progress||0}" min="0" max="100" data-taskid="${task.id}"><button class="btn btn-sm btn-success update-progress-btn" data-id="${task.id}">Update</button></div><small class="text-muted">${task.start_date||'—'} → ${task.end_date||'—'}</small></div>`).join('');
-      html += `<div class="project-card"><div class="project-header"><div><h5>${escapeHtml(proj.name)}</h5><span class="badge bg-light">${escapeHtml(proj.project_type||'General')}</span><div><small>${proj.start_date||'—'} → ${proj.end_date||'—'}</small></div></div><div class="progress-badge">${proj.completion||0}%</div><div class="project-actions"><button class="project-action-btn edit-project-btn" data-id="${proj.id}">Edit</button><button class="project-action-btn report-btn" data-report-id="${proj.id}">Report</button>${userRole==='admin'?`<button class="project-action-btn add-member-btn" data-id="${proj.id}">Add Member</button>`:''}<button class="project-action-btn delete-project-btn text-danger" data-id="${proj.id}">Delete</button></div></div><div class="p-3">${tasksHtml||'<p class="text-muted text-center">No tasks</p>'}</div><div class="card-footer"><small>${(proj.tasks||[]).length} tasks</small> <button class="btn btn-sm btn-outline-secondary add-task-btn" data-projid="${proj.id}">+ Add Task</button></div></div>`;
+      let tasksHtml = (proj.tasks || []).map(task => `
+        <div class="task-item">
+          <div class="d-flex justify-content-between align-items-start">
+            <strong class="task-name">${escapeHtml(task.name)}</strong>
+            <div>
+              <button class="btn btn-sm btn-outline-warning edit-task-btn" onclick="openEditTaskModal(${proj.id},${task.id})">
+                <i class="bi bi-pencil"></i> Edit
+              </button>
+              <button class="btn btn-sm btn-outline-danger delete-task-btn" data-taskid="${task.id}">
+                <i class="bi bi-trash"></i>
+              </button>
+            </div>
+          </div>
+          <div class="task-progress mt-2">
+            <div class="progress flex-grow-1">
+              <div class="progress-bar bg-success" style="width:${task.progress || 0}%"></div>
+            </div>
+            <input type="number" class="task-progress-input" value="${task.progress || 0}" min="0" max="100" data-taskid="${task.id}" style="width: 80px;">
+            <button class="btn btn-sm btn-success update-progress-btn" data-id="${task.id}">Update</button>
+          </div>
+          <small class="text-muted task-meta">
+            <i class="bi bi-calendar"></i> ${task.start_date || '—'} → ${task.end_date || '—'}
+          </small>
+        </div>
+      `).join('');
+      
+      html += `
+        <div class="project-card">
+          <div class="project-header">
+            <div class="project-title">
+              <div>
+                <h5 class="mb-1">${escapeHtml(proj.name)}</h5>
+                <span class="badge bg-light">${escapeHtml(proj.project_type || 'General')}</span>
+                ${proj.created_by ? `<small class="text-muted ms-2">Created by: ${escapeHtml(proj.created_by)}</small>` : ''}
+              </div>
+              <div class="progress-badge">${proj.completion || 0}%</div>
+            </div>
+            <div class="project-actions">
+              <button class="project-action-btn edit-project-btn" data-id="${proj.id}">
+                <i class="bi bi-pencil"></i> Edit
+              </button>
+              <button class="project-action-btn report-btn" data-report-id="${proj.id}">
+                <i class="bi bi-file-text"></i> Report
+              </button>
+              ${userRole === 'admin' ? `
+                <button class="project-action-btn add-member-btn" data-id="${proj.id}">
+                  <i class="bi bi-person-plus"></i> Add Member
+                </button>
+              ` : ''}
+              <button class="project-action-btn delete-project-btn text-danger" data-id="${proj.id}">
+                <i class="bi bi-trash"></i> Delete
+              </button>
+            </div>
+          </div>
+          <div class="p-3">
+            ${tasksHtml || '<p class="text-muted text-center mb-0">No tasks yet. Click "Add Task" to get started.</p>'}
+          </div>
+          <div class="card-footer bg-transparent d-flex justify-content-between align-items-center">
+            <small class="text-muted">${(proj.tasks || []).length} task(s)</small>
+            <button class="btn btn-sm btn-outline-secondary add-task-btn" data-projid="${proj.id}">
+              <i class="bi bi-plus-circle"></i> Add Task
+            </button>
+          </div>
+        </div>
+      `;
     });
     container.innerHTML = html;
     attachEvents();
@@ -622,37 +857,350 @@
   }
 
   function attachEvents() {
-    document.querySelectorAll('.edit-project-btn').forEach(btn => btn.onclick = () => { const p=projectsData.find(p=>p.id==btn.dataset.id); if(p){ document.getElementById('editProjectId').value=p.id; document.getElementById('editName').value=p.name; document.getElementById('editType').value=p.project_type; document.getElementById('editStart').value=p.start_date||''; document.getElementById('editEnd').value=p.end_date||''; new bootstrap.Modal(document.getElementById('editProjectModal')).show(); } });
-    document.querySelectorAll('.delete-project-btn').forEach(btn => btn.onclick = async () => { if(confirm('Move to trash?')) await deleteProjectOnServer(parseInt(btn.dataset.id)); });
-    document.querySelectorAll('.add-task-btn').forEach(btn => btn.onclick = async () => await addTaskToProject(parseInt(btn.dataset.projid)));
-    document.querySelectorAll('.delete-task-btn').forEach(btn => btn.onclick = async () => { if(confirm('Delete task?')) await deleteTaskOnServer(parseInt(btn.dataset.taskid)); });
-    document.querySelectorAll('.report-btn').forEach(btn => btn.onclick = () => openReport(parseInt(btn.dataset.reportId)));
-    document.querySelectorAll('.update-progress-btn').forEach(btn => btn.onclick = async () => { const tid=parseInt(btn.dataset.id); const inp=btn.parentElement.querySelector('.task-progress-input'); let val=parseInt(inp.value); if(isNaN(val)) val=0; val=Math.min(100,Math.max(0,val)); await updateTaskProgress(tid,val); });
-    if(userRole==='admin') document.querySelectorAll('.add-member-btn').forEach(btn => btn.onclick = async () => { document.getElementById('addMemberProjectId').value=btn.dataset.id; await loadAllUsers(); new bootstrap.Modal(document.getElementById('addMemberModal')).show(); });
+    document.querySelectorAll('.edit-project-btn').forEach(btn => btn.onclick = () => { 
+      const p = projectsData.find(p => p.id == btn.dataset.id); 
+      if(p) {
+        document.getElementById('editProjectId').value = p.id; 
+        document.getElementById('editName').value = p.name; 
+        document.getElementById('editType').value = p.project_type; 
+        document.getElementById('editStart').value = p.start_date || ''; 
+        document.getElementById('editEnd').value = p.end_date || ''; 
+        new bootstrap.Modal(document.getElementById('editProjectModal')).show(); 
+      } 
+    });
+    
+    document.querySelectorAll('.delete-project-btn').forEach(btn => btn.onclick = async () => { 
+      if(confirm('Move this project to trash? You can restore it later from the Trash folder.')) 
+        await deleteProjectOnServer(parseInt(btn.dataset.id)); 
+    });
+    
+    document.querySelectorAll('.add-task-btn').forEach(btn => btn.onclick = async () => 
+      await addTaskToProject(parseInt(btn.dataset.projid))
+    );
+    
+    document.querySelectorAll('.delete-task-btn').forEach(btn => btn.onclick = async () => { 
+      if(confirm('Delete this task?')) 
+        await deleteTaskOnServer(parseInt(btn.dataset.taskid)); 
+    });
+    
+    document.querySelectorAll('.report-btn').forEach(btn => btn.onclick = () => 
+      openReport(parseInt(btn.dataset.reportId))
+    );
+    
+    document.querySelectorAll('.update-progress-btn').forEach(btn => btn.onclick = async () => { 
+      const tid = parseInt(btn.dataset.id); 
+      const inp = btn.parentElement.querySelector('.task-progress-input'); 
+      let val = parseInt(inp.value); 
+      if(isNaN(val)) val = 0; 
+      val = Math.min(100, Math.max(0, val)); 
+      await updateTaskProgress(tid, val); 
+    });
+    
+    if(userRole === 'admin') {
+      document.querySelectorAll('.add-member-btn').forEach(btn => btn.onclick = async () => { 
+        document.getElementById('addMemberProjectId').value = btn.dataset.id; 
+        await loadAllUsers(); 
+        new bootstrap.Modal(document.getElementById('addMemberModal')).show(); 
+      });
+    }
   }
 
-  async function loadAllUsers() { try { const res=await fetch('/api/admin/all_users'); const data=await res.json(); if(data.success){ const sel=document.getElementById('memberUserSelect'); sel.innerHTML='<option value="">Select user...</option>'; data.users.forEach(u=>sel.innerHTML+=`<option value="${u.email}">${escapeHtml(u.name)} (${u.email})</option>`); } } catch(e){} }
-  async function addMemberToProject(pid,email){ const res=await fetch(`/api/projects/${pid}/add_member`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email})}); const data=await res.json(); if(data.success){ showToast('Member added','success'); await loadProjectsFromServer(); } else showToast(data.error,'danger'); }
+  async function loadAllUsers() { 
+    try { 
+      const res = await fetch('/api/admin/all_users'); 
+      const data = await res.json(); 
+      if(data.success) { 
+        const sel = document.getElementById('memberUserSelect'); 
+        sel.innerHTML = '<option value="">Select user...</option>'; 
+        data.users.forEach(u => sel.innerHTML += `<option value="${u.email}">${escapeHtml(u.name)} (${u.email})</option>`); 
+      } else {
+        showToast('Failed to load users', 'danger');
+      }
+    } catch(e) {
+      console.error('Load users error:', e);
+    } 
+  }
+  
+  async function addMemberToProject(pid, email) { 
+    try {
+      const res = await fetch(`/api/projects/${pid}/add_member`, {
+        method: 'POST', 
+        headers: {'Content-Type': 'application/json'}, 
+        body: JSON.stringify({email})
+      }); 
+      const data = await res.json(); 
+      if(data.success) { 
+        showToast('Member added successfully', 'success'); 
+        await loadProjectsFromServer(); 
+      } else {
+        showToast(data.error || 'Failed to add member', 'danger');
+      }
+    } catch(e) {
+      console.error('Add member error:', e);
+      showToast('Network error', 'danger');
+    }
+  }
 
-  function openReport(pid){ const proj=projectsData.find(p=>p.id===pid); if(!proj) return; const body=document.getElementById('reportModalBody'); body.innerHTML=`<div><h2>${escapeHtml(proj.name)}</h2><p>Completion: ${proj.completion||0}%</p><table class="table"><thead><tr><th>Task</th><th>Progress</th></tr></thead><tbody>${(proj.tasks||[]).map(t=>`<tr><td>${escapeHtml(t.name)}</td><td>${t.progress||0}%</td></tr>`).join('')}</tbody></table></div>`; new bootstrap.Modal(document.getElementById('reportModal')).show(); }
+  function openReport(pid) { 
+    const proj = projectsData.find(p => p.id === pid); 
+    if(!proj) return; 
+    const body = document.getElementById('reportModalBody'); 
+    const totalTasks = (proj.tasks || []).length;
+    const completedTasks = (proj.tasks || []).filter(t => (t.progress || 0) >= 100).length;
+    const inProgressTasks = (proj.tasks || []).filter(t => (t.progress || 0) > 0 && (t.progress || 0) < 100).length;
+    
+    body.innerHTML = `
+      <div class="report-wrap">
+        <div class="report-header p-3 mb-3">
+          <h2>${escapeHtml(proj.name)}</h2>
+          <p class="text-muted">Project Type: ${escapeHtml(proj.project_type || 'General')}</p>
+          <div class="d-flex gap-3 mt-3">
+            <div class="report-stat-badge">
+              <strong>Completion:</strong> ${proj.completion || 0}%
+            </div>
+            <div class="report-stat-badge">
+              <strong>Tasks:</strong> ${totalTasks}
+            </div>
+            <div class="report-stat-badge">
+              <strong>Completed:</strong> ${completedTasks}
+            </div>
+            <div class="report-stat-badge">
+              <strong>In Progress:</strong> ${inProgressTasks}
+            </div>
+          </div>
+        </div>
+        <h5>Task Details</h5>
+        <table class="table table-striped">
+          <thead>
+            <tr><th>Task Name</th><th>Progress</th><th>Start Date</th><th>End Date</th></tr>
+          </thead>
+          <tbody>
+            ${(proj.tasks || []).map(t => `
+              <tr>
+                <td>${escapeHtml(t.name)}</td>
+                <td>
+                  <div class="progress" style="width: 100px;">
+                    <div class="progress-bar bg-success" style="width: ${t.progress || 0}%"></div>
+                  </div>
+                  ${t.progress || 0}%
+                </td>
+                <td>${t.start_date || '—'}</td>
+                <td>${t.end_date || '—'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `; 
+    new bootstrap.Modal(document.getElementById('reportModal')).show(); 
+  }
 
-  function updateStats(){ let total=projectsData.length, avg=total?Math.round(projectsData.reduce((a,p)=>a+(p.completion||0),0)/total):0, onTrack=projectsData.filter(p=>(p.completion||0)>=75).length; document.getElementById('statProjects').innerText=total; document.getElementById('statCompletion').innerText=avg+'%'; document.getElementById('statOntrack').innerText=onTrack; }
+  function updateStats() { 
+    let total = projectsData.length, 
+        avg = total ? Math.round(projectsData.reduce((a,p) => a + (p.completion || 0), 0) / total) : 0, 
+        onTrack = projectsData.filter(p => (p.completion || 0) >= 75).length; 
+    document.getElementById('statProjects').innerText = total; 
+    document.getElementById('statCompletion').innerText = avg + '%'; 
+    document.getElementById('statOntrack').innerText = onTrack; 
+  }
 
-  function renderGanttChart(){ let tasks=[]; projectsData.forEach(p=>(p.tasks||[]).forEach(t=>{ if(t.start_date&&t.end_date) tasks.push({id:t.id.toString(),name:t.name,start:t.start_date,end:t.end_date,progress:(t.progress||0)/100}); })); const ganttDiv=document.getElementById("gantt"); if(!ganttDiv) return; ganttDiv.innerHTML=''; if(tasks.length===0){ ganttDiv.innerHTML='<div class="alert alert-light">No tasks with dates</div>'; return; } new Gantt("#gantt",tasks,{ on_date_change:async(task,start,end)=>await updateTaskOnServer(parseInt(task.id),{start_date:start.toISOString().slice(0,10),end_date:end.toISOString().slice(0,10)}), on_progress_change:async(task,prog)=>await updateTaskOnServer(parseInt(task.id),{progress:Math.round(prog*100)}) }); }
+  function renderGanttChart() { 
+    let tasks = []; 
+    projectsData.forEach(p => (p.tasks || []).forEach(t => { 
+      if(t.start_date && t.end_date) 
+        tasks.push({
+          id: t.id.toString(), 
+          name: t.name, 
+          start: t.start_date, 
+          end: t.end_date, 
+          progress: (t.progress || 0) / 100
+        }); 
+    })); 
+    const ganttDiv = document.getElementById("gantt"); 
+    if(!ganttDiv) return; 
+    ganttDiv.innerHTML = ''; 
+    if(tasks.length === 0) { 
+      ganttDiv.innerHTML = '<div class="alert alert-light text-center">No tasks with dates to display in Gantt chart. Add tasks with start and end dates to see them here.</div>'; 
+      return; 
+    } 
+    new Gantt("#gantt", tasks, { 
+      on_date_change: async (task, start, end) => 
+        await updateTaskOnServer(parseInt(task.id), {
+          start_date: start.toISOString().slice(0,10), 
+          end_date: end.toISOString().slice(0,10)
+        }), 
+      on_progress_change: async (task, prog) => 
+        await updateTaskOnServer(parseInt(task.id), {progress: Math.round(prog * 100)}),
+      view_mode: 'Week'
+    }); 
+  }
 
-  window.openEditTaskModal = async (projectId,taskId)=>{ const proj=projectsData.find(p=>p.id===projectId); const task=proj?.tasks?.find(t=>t.id===taskId); if(!task) return; document.getElementById('editTaskId').value=taskId; document.getElementById('editTaskName').value=task.name; document.getElementById('editTaskProgress').value=task.progress||0; document.getElementById('editTaskProgressSlider').value=task.progress||0; document.getElementById('editTaskStartDate').value=task.start_date||''; document.getElementById('editTaskEndDate').value=task.end_date||''; document.getElementById('currentMediaList').innerHTML=(task.media||[]).map(m=>`<div class="col-4"><img src="/uploads/${m.filename}" class="img-thumbnail" style="height:80px;object-fit:cover"></div>`).join('')||'<p class="text-muted">No media</p>'; new bootstrap.Modal(document.getElementById('editTaskModal')).show(); };
-  document.getElementById('editTaskForm')?.addEventListener('submit',async(e)=>{ e.preventDefault(); const tid=parseInt(document.getElementById('editTaskId').value); const success=await updateTaskOnServer(tid,{ name:document.getElementById('editTaskName').value, progress:parseInt(document.getElementById('editTaskProgress').value), start_date:document.getElementById('editTaskStartDate').value, end_date:document.getElementById('editTaskEndDate').value }); const imgFiles=document.getElementById('modalImageInput').files, vidFiles=document.getElementById('modalVideoInput').files; if(imgFiles.length||vidFiles.length){ const fd=new FormData(); for(let f of imgFiles) fd.append('images',f); for(let f of vidFiles) fd.append('videos',f); await fetch(`/api/tasks/${tid}/media`,{method:'POST',body:fd}); } if(success){ bootstrap.Modal.getInstance(document.getElementById('editTaskModal')).hide(); showToast('Task updated','success'); } else showToast('Update failed','danger'); });
-  document.getElementById('addProjectForm')?.addEventListener('submit',async(e)=>{ e.preventDefault(); const success=await createProjectOnServer({ name:document.getElementById('projName').value, project_type:document.getElementById('projType').value, start_date:document.getElementById('projStart').value, end_date:document.getElementById('projEnd').value }); if(success){ bootstrap.Modal.getInstance(document.getElementById('addProjectModal')).hide(); document.getElementById('addProjectForm').reset(); showToast('Project created','success'); } else showToast('Failed','danger'); });
-  document.getElementById('editProjectForm')?.addEventListener('submit',async(e)=>{ e.preventDefault(); const id=parseInt(document.getElementById('editProjectId').value); const success=await updateProjectOnServer(id,{ name:document.getElementById('editName').value, project_type:document.getElementById('editType').value, start_date:document.getElementById('editStart').value, end_date:document.getElementById('editEnd').value }); if(success){ bootstrap.Modal.getInstance(document.getElementById('editProjectModal')).hide(); showToast('Updated','success'); } else showToast('Failed','danger'); });
-  document.getElementById('confirmAddMemberBtn')?.addEventListener('click',async()=>{ const pid=parseInt(document.getElementById('addMemberProjectId').value); const email=document.getElementById('memberUserSelect').value; if(email) await addMemberToProject(pid,email); bootstrap.Modal.getInstance(document.getElementById('addMemberModal')).hide(); });
-  document.getElementById('globalSearch')?.addEventListener('input',(e)=>renderProjects(e.target.value));
-  document.getElementById('printReportBtn')?.addEventListener('click',()=>{ const w=window.open(''); w.document.write(`<html><head><title>Report</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/css/bootstrap.min.css" rel="stylesheet"></head><body>${document.getElementById('reportModalBody').innerHTML}</body></html>`); w.print(); });
-  document.getElementById('exportReportPDFBtn')?.addEventListener('click',()=>html2pdf().set({margin:1,filename:'report.pdf'}).from(document.getElementById('reportModalBody')).save());
-  function escapeHtml(str){ if(!str) return ''; return str.replace(/[&<>]/g,function(m){if(m==='&')return '&amp;';if(m==='<')return '&lt;';if(m==='>')return '&gt;';return m;}); }
-  async function checkTeamMember(){ const res=await fetch('/api/check_team_member'); const data=await res.json(); showToast(JSON.stringify(data,null,2),'info'); }
-  const mobileMenuToggle=document.getElementById('mobileMenuToggle'),sidebar=document.getElementById('sidebar'),mobileOverlay=document.getElementById('mobileOverlay'); if(mobileMenuToggle) mobileMenuToggle.onclick=()=>{sidebar.classList.toggle('mobile-open');mobileOverlay.classList.toggle('active');}; if(mobileOverlay) mobileOverlay.onclick=()=>{sidebar.classList.remove('mobile-open');mobileOverlay.classList.remove('active');};
+  window.openEditTaskModal = async (projectId, taskId) => { 
+    const proj = projectsData.find(p => p.id === projectId); 
+    const task = proj?.tasks?.find(t => t.id === taskId); 
+    if(!task) return; 
+    document.getElementById('editTaskId').value = taskId; 
+    document.getElementById('editTaskName').value = task.name; 
+    document.getElementById('editTaskProgress').value = task.progress || 0; 
+    document.getElementById('editTaskProgressSlider').value = task.progress || 0; 
+    document.getElementById('editTaskStartDate').value = task.start_date || ''; 
+    document.getElementById('editTaskEndDate').value = task.end_date || ''; 
+    document.getElementById('currentMediaList').innerHTML = (task.media || []).map(m => 
+      `<div class="col-4"><img src="/uploads/${m.filename}" class="img-thumbnail" style="height:80px;object-fit:cover"></div>`
+    ).join('') || '<p class="text-muted">No media uploaded</p>'; 
+    new bootstrap.Modal(document.getElementById('editTaskModal')).show(); 
+  };
+  
+  document.getElementById('editTaskForm')?.addEventListener('submit', async (e) => { 
+    e.preventDefault(); 
+    const tid = parseInt(document.getElementById('editTaskId').value); 
+    const success = await updateTaskOnServer(tid, { 
+      name: document.getElementById('editTaskName').value, 
+      progress: parseInt(document.getElementById('editTaskProgress').value), 
+      start_date: document.getElementById('editTaskStartDate').value, 
+      end_date: document.getElementById('editTaskEndDate').value 
+    }); 
+    const imgFiles = document.getElementById('modalImageInput').files, 
+          vidFiles = document.getElementById('modalVideoInput').files; 
+    if(imgFiles.length || vidFiles.length) { 
+      const fd = new FormData(); 
+      for(let f of imgFiles) fd.append('images', f); 
+      for(let f of vidFiles) fd.append('videos', f); 
+      await fetch(`/api/tasks/${tid}/media`, {method: 'POST', body: fd}); 
+    } 
+    if(success) { 
+      bootstrap.Modal.getInstance(document.getElementById('editTaskModal')).hide(); 
+      showToast('Task updated successfully', 'success'); 
+      await loadProjectsFromServer();
+    } else {
+      showToast('Update failed', 'danger');
+    }
+  });
+  
+  document.getElementById('addProjectForm')?.addEventListener('submit', async (e) => { 
+    e.preventDefault(); 
+    const success = await createProjectOnServer({ 
+      name: document.getElementById('projName').value, 
+      project_type: document.getElementById('projType').value, 
+      start_date: document.getElementById('projStart').value, 
+      end_date: document.getElementById('projEnd').value 
+    }); 
+    if(success) { 
+      bootstrap.Modal.getInstance(document.getElementById('addProjectModal')).hide(); 
+      document.getElementById('addProjectForm').reset(); 
+      showToast('Project created successfully', 'success'); 
+    } else {
+      showToast('Failed to create project', 'danger');
+    }
+  });
+  
+  document.getElementById('editProjectForm')?.addEventListener('submit', async (e) => { 
+    e.preventDefault(); 
+    const id = parseInt(document.getElementById('editProjectId').value); 
+    const success = await updateProjectOnServer(id, { 
+      name: document.getElementById('editName').value, 
+      project_type: document.getElementById('editType').value, 
+      start_date: document.getElementById('editStart').value, 
+      end_date: document.getElementById('editEnd').value 
+    }); 
+    if(success) { 
+      bootstrap.Modal.getInstance(document.getElementById('editProjectModal')).hide(); 
+      showToast('Project updated successfully', 'success'); 
+    } else {
+      showToast('Update failed', 'danger');
+    }
+  });
+  
+  document.getElementById('confirmAddMemberBtn')?.addEventListener('click', async () => { 
+    const pid = parseInt(document.getElementById('addMemberProjectId').value); 
+    const email = document.getElementById('memberUserSelect').value; 
+    if(email) {
+      await addMemberToProject(pid, email);
+      bootstrap.Modal.getInstance(document.getElementById('addMemberModal')).hide();
+    } else {
+      showToast('Please select a user', 'warning');
+    }
+  });
+  
+  document.getElementById('globalSearch')?.addEventListener('input', (e) => {
+    currentSearchText = e.target.value;
+    renderProjects(currentSearchText);
+  });
+  
+  document.getElementById('printReportBtn')?.addEventListener('click', () => { 
+    const w = window.open(''); 
+    w.document.write(`<html><head><title>Project Report</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/css/bootstrap.min.css" rel="stylesheet"></head><body><div class="container mt-4">${document.getElementById('reportModalBody').innerHTML}</div></body></html>`); 
+    w.print(); 
+  });
+  
+  document.getElementById('exportReportPDFBtn')?.addEventListener('click', async () => {
+    const loadingOverlay = document.getElementById('loadingOverlay');
+    loadingOverlay.classList.add('active');
+    try {
+      const element = document.getElementById('reportModalBody');
+      const opt = {
+        margin: [0.5, 0.5, 0.5, 0.5],
+        filename: `project_report_${Date.now()}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true },
+        jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
+      };
+      await html2pdf().set(opt).from(element).save();
+      showToast('PDF generated successfully', 'success');
+    } catch (error) {
+      console.error('PDF generation error:', error);
+      showToast('Failed to generate PDF', 'danger');
+    } finally {
+      loadingOverlay.classList.remove('active');
+    }
+  });
+  
+  function escapeHtml(str) { 
+    if(!str) return ''; 
+    return str.replace(/[&<>]/g, function(m) {
+      if(m === '&') return '&amp;';
+      if(m === '<') return '&lt;';
+      if(m === '>') return '&gt;';
+      return m;
+    }); 
+  }
+  
+  async function checkTeamMember() { 
+    const res = await fetch('/api/check_team_member'); 
+    const data = await res.json(); 
+    console.log('Team Member Check:', data);
+    showToast(`Status: ${JSON.stringify(data, null, 2)}`, 'info', { duration: 8000 }); 
+  }
+  
+  // Mobile menu handling
+  const mobileMenuToggle = document.getElementById('mobileMenuToggle');
+  const sidebar = document.getElementById('sidebar');
+  const mobileOverlay = document.getElementById('mobileOverlay');
+  
+  if(mobileMenuToggle) {
+    mobileMenuToggle.onclick = () => {
+      sidebar.classList.toggle('mobile-open');
+      mobileOverlay.classList.toggle('active');
+    };
+  }
+  
+  if(mobileOverlay) {
+    mobileOverlay.onclick = () => {
+      sidebar.classList.remove('mobile-open');
+      mobileOverlay.classList.remove('active');
+    };
+  }
+  
+  // Trash button handler
+  document.getElementById('trashBtn')?.addEventListener('click', () => {
+    renderTrashProjects();
+  });
+  
+  // Load projects on page load and every 30 seconds
   loadProjectsFromServer();
-  setInterval(()=>{ if(!syncInProgress) loadProjectsFromServer(); },30000);
+  setInterval(() => { 
+    if(!syncInProgress) loadProjectsFromServer(); 
+  }, 30000);
 </script>
 </body>
 </html>
