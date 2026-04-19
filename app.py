@@ -77,7 +77,7 @@ migrate = Migrate(app, db)
 # Create tables if they don't exist
 with app.app_context():
     db.create_all()
-    
+
     # Set first user as admin if no admin exists
     if not User.query.filter_by(role='admin').first():
         first_user = User.query.first()
@@ -108,6 +108,187 @@ def parse_date(val):
     except (ValueError, TypeError):
         return None
 
+
+def _safe_list(value):
+    if not value:
+        return []
+    try:
+        return list(value)
+    except TypeError:
+        return []
+
+
+def project_is_trashed(project):
+    """
+    Supports multiple possible model designs without requiring schema changes.
+    Returns True if the project appears to be marked as trashed/archived/deleted.
+    """
+    if not project:
+        return False
+
+    trash_flags = [
+        "is_trashed", "trashed", "deleted", "is_deleted",
+        "in_trash", "archived", "is_archived"
+    ]
+    for field in trash_flags:
+        if hasattr(project, field):
+            try:
+                if bool(getattr(project, field)):
+                    return True
+            except Exception:
+                pass
+
+    status_fields = ["status"]
+    for field in status_fields:
+        if hasattr(project, field):
+            try:
+                status_val = getattr(project, field)
+                if isinstance(status_val, str) and status_val.lower() in {
+                    "trash", "trashed", "deleted", "archived"
+                }:
+                    return True
+            except Exception:
+                pass
+
+    date_fields = ["trashed_at", "deleted_at", "archived_at"]
+    for field in date_fields:
+        if hasattr(project, field):
+            try:
+                if getattr(project, field) is not None:
+                    return True
+            except Exception:
+                pass
+
+    return False
+
+
+def get_active_projects(projects):
+    return [p for p in projects if not project_is_trashed(p)]
+
+
+def mark_project_as_trashed(project):
+    """
+    Soft-delete if the model supports trash/archive fields.
+    Returns True if at least one trash-related attribute was updated.
+    """
+    updated = False
+    now = datetime.utcnow()
+
+    bool_fields = ["is_trashed", "trashed", "deleted", "is_deleted", "in_trash", "archived", "is_archived"]
+    for field in bool_fields:
+        if hasattr(project, field):
+            try:
+                setattr(project, field, True)
+                updated = True
+            except Exception:
+                pass
+
+    timestamp_fields = ["trashed_at", "deleted_at", "archived_at"]
+    for field in timestamp_fields:
+        if hasattr(project, field):
+            try:
+                setattr(project, field, now)
+                updated = True
+            except Exception:
+                pass
+
+    if hasattr(project, "status"):
+        try:
+            current_status = getattr(project, "status")
+            if isinstance(current_status, str):
+                setattr(project, "status", "trashed")
+                updated = True
+        except Exception:
+            pass
+
+    return updated
+
+
+def safe_delete_project(project):
+    """
+    Removes dependent records first so project deletion does not fail on FK constraints.
+    Also removes uploaded files on disk when possible.
+    """
+    # Delete media files first
+    for task in _safe_list(getattr(project, "tasks", [])):
+        for media in _safe_list(getattr(task, "media_files", [])):
+            try:
+                filepath = getattr(media, "filepath", None)
+                if filepath and os.path.exists(filepath):
+                    try:
+                        os.remove(filepath)
+                    except Exception as file_err:
+                        logger.warning(f"Could not remove file {filepath}: {file_err}")
+                db.session.delete(media)
+            except Exception as media_err:
+                logger.warning(f"Could not delete media record {getattr(media, 'id', None)}: {media_err}")
+
+    # Delete tasks next
+    for task in _safe_list(getattr(project, "tasks", [])):
+        try:
+            db.session.delete(task)
+        except Exception as task_err:
+            logger.warning(f"Could not delete task {getattr(task, 'id', None)}: {task_err}")
+
+    # Clear team member links before deleting the project
+    try:
+        if hasattr(project, "team_members"):
+            project.team_members.clear()
+    except Exception as rel_err:
+        logger.warning(f"Could not clear project members: {rel_err}")
+
+    db.session.delete(project)
+    db.session.commit()
+
+
+def move_project_to_trash(project):
+    """
+    Main trash handler:
+    1) Soft-delete when the model supports it.
+    2) Otherwise safely delete dependents and remove the project.
+    """
+    try:
+        if mark_project_as_trashed(project):
+            db.session.commit()
+            return {"success": True, "mode": "trashed"}
+        else:
+            safe_delete_project(project)
+            return {"success": True, "mode": "deleted"}
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Failed to move project to trash: {e}")
+        return {"success": False, "error": str(e)}
+
+
+def user_can_access_project(project, user_role, team_member):
+    if user_role == 'admin':
+        return True
+    if not team_member:
+        return False
+    try:
+        return team_member in project.team_members
+    except Exception:
+        return False
+
+
+def user_can_manage_project(project, user, user_role, team_member):
+    """
+    Admin can manage everything.
+    Creator can manage their own project if a created_by_email field exists.
+    Fallback: project member can manage only read/update actions where allowed.
+    """
+    if user_role == 'admin':
+        return True
+
+    if hasattr(project, "created_by_email"):
+        try:
+            return getattr(project, "created_by_email") == user.email
+        except Exception:
+            pass
+
+    return user_can_access_project(project, user_role, team_member)
+
+
 # ================= AUTH =================
 @app.route('/register', methods=['GET','POST'])
 def register():
@@ -124,7 +305,7 @@ def register():
                     password_hash=generate_password_hash(password))
         db.session.add(user)
         db.session.flush()  # Get user.id
-        
+
         # Check if TeamMember already exists
         tm = TeamMember.query.filter_by(email=email).first()
         if not tm:
@@ -136,6 +317,7 @@ def register():
         return redirect(url_for('login'))
 
     return render_template('register.html')
+
 
 @app.route('/login', methods=['GET','POST'])
 def login():
@@ -155,6 +337,7 @@ def login():
 
     return render_template('login.html')
 
+
 @app.route('/logout')
 def logout():
     session.clear()
@@ -164,6 +347,7 @@ def logout():
 @app.route('/')
 def index():
     return redirect(url_for('dashboard') if 'user_id' in session else 'login')
+
 
 @app.route('/admin')
 @login_required
@@ -181,7 +365,7 @@ def dashboard():
         tm = TeamMember(email=user.email, name=user.name, user_id=user.id)
         db.session.add(tm)
         db.session.commit()
-    
+
     # For the dashboard template, we'll let the JavaScript fetch projects via API
     # This ensures consistency between server-side and client-side data
     return render_template('index.html')
@@ -192,21 +376,21 @@ def dashboard():
 def add_project():
     name = request.form['name']
     p = Project(name=name)
-    
+
     user = User.query.get(session['user_id'])
     tm = TeamMember.query.filter_by(email=user.email).first()
-    
+
     # Always add the creator as a team member if they're a team member
     if tm:
         p.team_members.append(tm)
-    
+
     # If admin is creating project, add all team members automatically
     if session.get('user_role') == 'admin':
         all_members = TeamMember.query.all()
         for member in all_members:
             if member not in p.team_members:
                 p.team_members.append(member)
-    
+
     db.session.add(p)
     db.session.commit()
     return redirect(url_for('dashboard'))
@@ -220,6 +404,7 @@ def add_task(project_id):
     db.session.add(task)
     db.session.commit()
     return redirect(url_for('dashboard'))
+
 
 @app.route('/update_task/<int:id>', methods=['POST'])
 @login_required
@@ -244,6 +429,7 @@ def upload(task_id):
 
     return redirect(url_for('dashboard'))
 
+
 @app.route('/uploads/<path:filename>')
 def uploaded_file(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
@@ -259,16 +445,16 @@ def generate_pdf(project):
     doc = SimpleDocTemplate(buffer, pagesize=letter)
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle('CustomTitle', parent=styles['Title'], fontSize=16, spaceAfter=30)
-    
+
     story = []
     story.append(Paragraph(f"Project Report: {project.name}", title_style))
     story.append(Spacer(1, 12))
-    
+
     # Project info
     story.append(Paragraph(f"Type: {getattr(project, 'project_type', 'General')}", styles['Normal']))
     story.append(Paragraph(f"Completion: {project.completion:.1f}%", styles['Normal']))
     story.append(Spacer(1, 20))
-    
+
     # Tasks table
     if project.tasks:
         data = [['Task Name', 'Progress', 'Start Date', 'End Date']]
@@ -279,7 +465,7 @@ def generate_pdf(project):
                 task.start_date.strftime("%Y-%m-%d") if task.start_date else 'N/A',
                 task.end_date.strftime("%Y-%m-%d") if task.end_date else 'N/A'
             ])
-        
+
         table = Table(data)
         table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
@@ -292,10 +478,11 @@ def generate_pdf(project):
             ('GRID', (0, 0), (-1, -1), 1, colors.black),
         ]))
         story.append(table)
-    
+
     doc.build(story)
     buffer.seek(0)
     return buffer
+
 
 @app.route('/report/<int:id>')
 @login_required
@@ -313,18 +500,21 @@ def api_projects():
         try:
             user = User.query.get(session['user_id'])
             tm = TeamMember.query.filter_by(email=user.email).first()
-            
-            # For admin, return all projects; for team members, return only their projects
+
+            # For admin, return all active projects; for team members, return only their active projects
             if session.get('user_role') == 'admin':
-                projects = Project.query.all()
+                projects = get_active_projects(Project.query.all())
             else:
-                projects = tm.projects if tm else []
-            
+                projects = get_active_projects(tm.projects) if tm else []
+
             projects_list = []
             for p in projects:
                 tasks_list = []
-                for task in p.tasks:
-                    media_list = [{"id": m.id, "filename": m.filename, "filepath": m.filepath} for m in task.media_files]
+                for task in _safe_list(getattr(p, "tasks", [])):
+                    media_list = [
+                        {"id": m.id, "filename": m.filename, "filepath": m.filepath}
+                        for m in _safe_list(getattr(task, "media_files", []))
+                    ]
                     tasks_list.append({
                         "id": task.id,
                         "name": task.name,
@@ -333,12 +523,12 @@ def api_projects():
                         "end_date": task.end_date.strftime("%Y-%m-%d") if task.end_date else None,
                         "media": media_list
                     })
-                
+
                 # Calculate project completion
                 completion = 0
                 if tasks_list:
                     completion = sum(t.get('progress', 0) for t in tasks_list) // len(tasks_list)
-                
+
                 projects_list.append({
                     "id": p.id,
                     "name": p.name,
@@ -349,52 +539,52 @@ def api_projects():
                     "tasks": tasks_list,
                     "created_by": p.created_by_email if hasattr(p, 'created_by_email') else None
                 })
-            
+
             return jsonify({"success": True, "projects": projects_list})
         except Exception as e:
             logger.error(f"Error in api_projects GET: {e}")
             db.session.rollback()
             return jsonify({"success": False, "error": str(e)}), 500
-    
+
     elif request.method == 'POST':
         try:
-            data = request.get_json()
+            data = request.get_json(silent=True) or {}
             name = data.get('name')
             project_type = data.get('project_type') or data.get('type', 'General')
             start_date = parse_date(data.get('start_date'))
             end_date = parse_date(data.get('end_date'))
-            
+
             if not name:
                 return jsonify({"success": False, "error": "Project name required"}), 400
-            
+
             user = User.query.get(session['user_id'])
             tm = TeamMember.query.filter_by(email=user.email).first()
-            
+
             # Create team member if doesn't exist
             if not tm:
                 tm = TeamMember(email=user.email, name=user.name, user_id=user.id)
                 db.session.add(tm)
                 db.session.flush()
-            
+
             project = Project(
                 name=name,
                 project_type=project_type,
                 start_date=start_date,
                 end_date=end_date
             )
-            
+
             # Add created_by attribute if it exists in the model
             if hasattr(project, 'created_by_email'):
                 project.created_by_email = user.email
-            
+
             db.session.add(project)
             db.session.flush()
-            
+
             # CRITICAL: Always add the creator as a team member to the project
             if tm:
                 project.team_members.append(tm)
                 print(f"Added creator {user.email} to project {name}")
-            
+
             # If admin is creating project, add ALL team members automatically
             if session.get('user_role') == 'admin':
                 all_members = TeamMember.query.all()
@@ -402,9 +592,9 @@ def api_projects():
                     if member not in project.team_members:
                         project.team_members.append(member)
                         print(f"Added {member.email} to project {name}")
-            
+
             db.session.commit()
-            
+
             return jsonify({"success": True, "project": {"id": project.id, "name": project.name}}), 201
         except Exception as e:
             logger.error(f"Error in api_projects POST: {e}")
@@ -420,33 +610,36 @@ def api_my_projects():
     try:
         user = User.query.get(session['user_id'])
         tm = TeamMember.query.filter_by(email=user.email).first()
-        
+
         # Create team member if doesn't exist
         if not tm:
             tm = TeamMember(email=user.email, name=user.name, user_id=user.id)
             db.session.add(tm)
             db.session.commit()
-        
+
         projects = set()
-        
-        # For admin, get ALL projects
+
+        # For admin, get ALL active projects
         if session.get('user_role') == 'admin':
-            projects = set(Project.query.all())
+            projects = set(get_active_projects(Project.query.all()))
         else:
             # Get projects where user is explicitly a team member
             if tm and tm.projects:
-                projects.update(tm.projects)
-            
+                projects.update(get_active_projects(tm.projects))
+
             # Get projects created by this user (if created_by_email exists in model)
             if hasattr(Project, 'created_by_email'):
                 created_projects = Project.query.filter_by(created_by_email=user.email).all()
-                projects.update(created_projects)
-        
+                projects.update(get_active_projects(created_projects))
+
         projects_list = []
         for p in projects:
             tasks_list = []
-            for task in p.tasks:
-                media_list = [{"id": m.id, "filename": m.filename, "filepath": m.filepath} for m in task.media_files]
+            for task in _safe_list(getattr(p, "tasks", [])):
+                media_list = [
+                    {"id": m.id, "filename": m.filename, "filepath": m.filepath}
+                    for m in _safe_list(getattr(task, "media_files", []))
+                ]
                 tasks_list.append({
                     "id": task.id,
                     "name": task.name,
@@ -455,12 +648,12 @@ def api_my_projects():
                     "end_date": task.end_date.strftime("%Y-%m-%d") if task.end_date else None,
                     "media": media_list
                 })
-            
+
             # Calculate project completion
             completion = 0
             if tasks_list:
                 completion = sum(t.get('progress', 0) for t in tasks_list) // len(tasks_list)
-            
+
             projects_list.append({
                 "id": p.id,
                 "name": p.name,
@@ -471,7 +664,7 @@ def api_my_projects():
                 "tasks": tasks_list,
                 "created_by": p.created_by_email if hasattr(p, 'created_by_email') else None
             })
-        
+
         return jsonify({"success": True, "projects": projects_list})
     except Exception as e:
         logger.error(f"Error in api_my_projects: {e}")
@@ -486,22 +679,22 @@ def api_check_team_member():
     try:
         user = User.query.get(session['user_id'])
         tm = TeamMember.query.filter_by(email=user.email).first()
-        
+
         result = {
             "user_email": user.email,
             "user_role": session.get('user_role'),
             "team_member_exists": tm is not None,
             "team_member_id": tm.id if tm else None,
             "team_member_email": tm.email if tm else None,
-            "projects_as_member": [{"id": p.id, "name": p.name} for p in tm.projects] if tm else [],
-            "all_projects": [{"id": p.id, "name": p.name} for p in Project.query.all()],
+            "projects_as_member": [{"id": p.id, "name": p.name} for p in get_active_projects(tm.projects)] if tm else [],
+            "all_projects": [{"id": p.id, "name": p.name} for p in get_active_projects(Project.query.all())],
             "user_created_projects": []
         }
-        
+
         if hasattr(Project, 'created_by_email'):
             created = Project.query.filter_by(created_by_email=user.email).all()
-            result["user_created_projects"] = [{"id": p.id, "name": p.name} for p in created]
-        
+            result["user_created_projects"] = [{"id": p.id, "name": p.name} for p in get_active_projects(created)]
+
         return jsonify(result)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -511,16 +704,16 @@ def api_check_team_member():
 @login_required
 def api_project_detail(project_id):
     project = Project.query.get_or_404(project_id)
-    
+
     # Check if user has access to this project
     user = User.query.get(session['user_id'])
     tm = TeamMember.query.filter_by(email=user.email).first()
     if session.get('user_role') != 'admin' and (not tm or tm not in project.team_members):
         return jsonify({"success": False, "error": "Access denied"}), 403
-    
+
     if request.method == 'PUT':
         try:
-            data = request.get_json()
+            data = request.get_json(silent=True) or {}
             if 'name' in data:
                 project.name = data['name']
             if 'project_type' in data:
@@ -529,27 +722,70 @@ def api_project_detail(project_id):
                 project.start_date = parse_date(data['start_date'])
             if 'end_date' in data:
                 project.end_date = parse_date(data['end_date'])
-            
+
             db.session.commit()
             return jsonify({"success": True})
         except Exception as e:
             logger.error(f"Error in api_project_detail PUT: {e}")
             db.session.rollback()
             return jsonify({"success": False, "error": str(e)}), 500
-    
+
     elif request.method == 'DELETE':
         try:
-            # Only admin can delete projects
-            if session.get('user_role') != 'admin':
-                return jsonify({"success": False, "error": "Only admin can delete projects"}), 403
-            
-            db.session.delete(project)
-            db.session.commit()
-            return jsonify({"success": True})
+            # Allow admin or the creator to move to trash
+            if not user_can_manage_project(project, user, session.get('user_role'), tm):
+                return jsonify({"success": False, "error": "Only admin or project creator can move project to trash"}), 403
+
+            result = move_project_to_trash(project)
+            if result["success"]:
+                return jsonify({
+                    "success": True,
+                    "message": "Project moved to trash successfully",
+                    "mode": result.get("mode", "trashed")
+                })
+            return jsonify({"success": False, "error": result.get("error", "Failed to move project to trash")}), 500
         except Exception as e:
             logger.error(f"Error in api_project_detail DELETE: {e}")
             db.session.rollback()
             return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route('/api/projects/<int:project_id>/trash', methods=['POST', 'DELETE'])
+@login_required
+def api_trash_project(project_id):
+    """
+    Explicit trash endpoint for front ends that call /trash or /move-to-trash.
+    This fixes 'Failed to move project to trash' when the UI uses a dedicated trash action.
+    """
+    try:
+        project = Project.query.get_or_404(project_id)
+        user = User.query.get(session['user_id'])
+        tm = TeamMember.query.filter_by(email=user.email).first()
+
+        if not user_can_manage_project(project, user, session.get('user_role'), tm):
+            return jsonify({"success": False, "error": "Only admin or project creator can move project to trash"}), 403
+
+        result = move_project_to_trash(project)
+        if result["success"]:
+            return jsonify({
+                "success": True,
+                "message": "Project moved to trash successfully",
+                "mode": result.get("mode", "trashed")
+            })
+        return jsonify({"success": False, "error": result.get("error", "Failed to move project to trash")}), 500
+    except Exception as e:
+        logger.error(f"Error in api_trash_project: {e}")
+        db.session.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route('/trash_project/<int:project_id>', methods=['POST', 'DELETE'])
+@login_required
+def trash_project_legacy(project_id):
+    """
+    Legacy-compatible alias for older front-end code.
+    """
+    return api_trash_project(project_id)
 
 
 @app.route('/api/projects/<int:project_id>/tasks', methods=['POST'])
@@ -557,15 +793,15 @@ def api_project_detail(project_id):
 def api_add_task(project_id):
     try:
         project = Project.query.get_or_404(project_id)
-        
+
         # Check if user has access to this project
         user = User.query.get(session['user_id'])
         tm = TeamMember.query.filter_by(email=user.email).first()
         if session.get('user_role') != 'admin' and (not tm or tm not in project.team_members):
             return jsonify({"success": False, "error": "Access denied"}), 403
-        
-        data = request.get_json()
-        
+
+        data = request.get_json(silent=True) or {}
+
         task = Task(
             name=data.get('name', 'New Task'),
             project_id=project_id,
@@ -575,7 +811,7 @@ def api_add_task(project_id):
         )
         db.session.add(task)
         db.session.commit()
-        
+
         return jsonify({"success": True, "task": {"id": task.id}}), 201
     except Exception as e:
         logger.error(f"Error in api_add_task: {e}")
@@ -589,20 +825,20 @@ def api_add_project_member(project_id):
     """Add a team member to a project"""
     try:
         project = Project.query.get_or_404(project_id)
-        data = request.get_json()
+        data = request.get_json(silent=True) or {}
         email = data.get('email', '').lower()
-        
+
         # Check if user has admin role
         is_admin = session.get('user_role') == 'admin'
-        
+
         if not is_admin:
             return jsonify({"success": False, "error": "Only admin can add members"}), 403
-        
+
         # Find team member by email
         team_member = TeamMember.query.filter_by(email=email).first()
         if not team_member:
             return jsonify({"success": False, "error": f"User with email {email} not found"}), 404
-        
+
         # Add member to project if not already added
         if team_member not in project.team_members:
             project.team_members.append(team_member)
@@ -610,7 +846,7 @@ def api_add_project_member(project_id):
             return jsonify({"success": True, "message": f"Added {email} to project"})
         else:
             return jsonify({"success": False, "error": "User already in project"}), 400
-            
+
     except Exception as e:
         logger.error(f"Error adding member to project: {e}")
         db.session.rollback()
@@ -637,8 +873,8 @@ def api_admin_all_projects():
     try:
         if session.get('user_role') != 'admin':
             return jsonify({"success": False, "error": "Admin access required"}), 403
-        
-        projects = Project.query.all()
+
+        projects = get_active_projects(Project.query.all())
         projects_list = []
         for p in projects:
             projects_list.append({
@@ -647,7 +883,7 @@ def api_admin_all_projects():
                 "project_type": getattr(p, 'project_type', 'General'),
                 "member_count": len(p.team_members)
             })
-        
+
         return jsonify({"success": True, "projects": projects_list})
     except Exception as e:
         logger.error(f"Error in api_admin_all_projects: {e}")
@@ -661,10 +897,10 @@ def api_admin_all_users():
     try:
         if session.get('user_role') != 'admin':
             return jsonify({"success": False, "error": "Admin access required"}), 403
-        
+
         users = User.query.all()
         users_list = [{"id": u.id, "name": u.name, "email": u.email, "role": u.role} for u in users]
-        
+
         return jsonify({"success": True, "users": users_list})
     except Exception as e:
         logger.error(f"Error in api_admin_all_users: {e}")
@@ -675,16 +911,16 @@ def api_admin_all_users():
 @login_required
 def api_task_detail(task_id):
     task = Task.query.get_or_404(task_id)
-    
+
     # Check if user has access to this task's project
     user = User.query.get(session['user_id'])
     tm = TeamMember.query.filter_by(email=user.email).first()
     if session.get('user_role') != 'admin' and (not tm or tm not in task.project.team_members):
         return jsonify({"success": False, "error": "Access denied"}), 403
-    
+
     if request.method == 'PUT':
         try:
-            data = request.get_json()
+            data = request.get_json(silent=True) or {}
             if 'name' in data:
                 task.name = data['name']
             if 'progress' in data:
@@ -693,14 +929,14 @@ def api_task_detail(task_id):
                 task.start_date = parse_date(data['start_date'])
             if 'end_date' in data:
                 task.end_date = parse_date(data['end_date'])
-            
+
             db.session.commit()
             return jsonify({"success": True})
         except Exception as e:
             logger.error(f"Error in api_task_detail PUT: {e}")
             db.session.rollback()
             return jsonify({"success": False, "error": str(e)}), 500
-    
+
     elif request.method == 'DELETE':
         try:
             db.session.delete(task)
@@ -717,13 +953,13 @@ def api_task_detail(task_id):
 def api_upload_media(task_id):
     try:
         task = Task.query.get_or_404(task_id)
-        
+
         # Check if user has access to this task's project
         user = User.query.get(session['user_id'])
         tm = TeamMember.query.filter_by(email=user.email).first()
         if session.get('user_role') != 'admin' and (not tm or tm not in task.project.team_members):
             return jsonify({"success": False, "error": "Access denied"}), 403
-        
+
         if 'images' in request.files:
             files = request.files.getlist('images')
             for file in files:
@@ -733,7 +969,7 @@ def api_upload_media(task_id):
                     file.save(path)
                     media = MediaFile(filename=filename, filepath=path, task_id=task_id)
                     db.session.add(media)
-        
+
         if 'videos' in request.files:
             files = request.files.getlist('videos')
             for file in files:
@@ -743,7 +979,7 @@ def api_upload_media(task_id):
                     file.save(path)
                     media = MediaFile(filename=filename, filepath=path, task_id=task_id)
                     db.session.add(media)
-        
+
         db.session.commit()
         return jsonify({"success": True})
     except Exception as e:
@@ -755,7 +991,7 @@ def api_upload_media(task_id):
 # ================= SCHEDULER JOB =================
 def weekly_reports():
     with app.app_context():
-        projects = Project.query.all()
+        projects = get_active_projects(Project.query.all())
         for p in projects:
             try:
                 pdf = generate_pdf(p)
@@ -776,6 +1012,7 @@ def internal_error(e):
     db.session.rollback()
     logger.error(f"Internal server error: {e}")
     return jsonify({"success": False, "error": "Internal server error"}), 500
+
 
 @app.errorhandler(404)
 def not_found(e):
