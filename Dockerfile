@@ -1,4 +1,4 @@
-# Use Python 3.9 slim image for smaller size
+# Use Python 3.11 slim image for smaller size
 FROM python:3.11-slim
 
 # Set working directory
@@ -11,7 +11,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     MALLOC_ARENA_MAX=2 \
     PYTHONOPTIMIZE=1
 
-# Install system dependencies
+# Install system dependencies (including curl for health checks)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libffi-dev \
@@ -24,8 +24,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy requirements file
 COPY requirements.txt .
 
-# Install Python dependencies
-RUN pip install --no-cache-dir --no-compile -r requirements.txt
+# Install Python dependencies - ensure gunicorn is installed
+RUN pip install --no-cache-dir --no-compile -r requirements.txt && \
+    pip install --no-cache-dir gunicorn==21.2.0
+
+# Verify gunicorn is installed
+RUN which gunicorn && gunicorn --version
 
 # Copy application
 COPY . .
@@ -42,9 +46,9 @@ USER app
 
 EXPOSE 5000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=45s --retries=3 \
+# Health check - using python's built-in HTTP server for health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:5000/health || exit 1
 
-# Run with Gunicorn
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "1", "--threads", "1", "--timeout", "30", "--graceful-timeout", "30", "--keep-alive", "5", "--max-requests", "1000", "--max-requests-jitter", "50", "--access-logfile", "-", "--error-logfile", "-", "--log-level", "info", "app:app"]
+# Run with Gunicorn - using full path to ensure it's found
+CMD ["/usr/local/bin/gunicorn", "--bind", "0.0.0.0:5000", "--workers", "1", "--threads", "2", "--timeout", "60", "--graceful-timeout", "30", "--keep-alive", "5", "--max-requests", "1000", "--max-requests-jitter", "50", "--access-logfile", "-", "--error-logfile", "-", "--log-level", "info", "app:app"]

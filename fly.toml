@@ -1,8 +1,13 @@
 # fly.toml
 app = "project-mgt-app"
+primary_region = "iad"
 
 [build]
   dockerfile = "Dockerfile"
+
+[env]
+  FLY_APP_NAME = "project-mgt-app"
+  PYTHONPATH = "/app"
 
 [[services]]
   internal_port = 5000
@@ -21,6 +26,15 @@ app = "project-mgt-app"
     port = 443
 
   [[services.tcp_checks]]
-    interval = 10000
-    timeout = 2000
-    grace_period = "10s"
+    interval = 15000
+    timeout = 3000
+    grace_period = "30s"
+
+  [[services.http_checks]]
+    interval = 30000
+    grace_period = "60s"
+    method = "get"
+    path = "/health"
+    protocol = "http"
+    timeout = 5000
+    tls_skip_verify = false

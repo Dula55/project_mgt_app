@@ -18,6 +18,7 @@ from flask import (
 )
 from flask_mail import Mail, Message
 from flask_migrate import Migrate
+from sqlalchemy import text
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 
@@ -759,6 +760,17 @@ def internal_error(e):
     db.session.rollback()
     logger.error(f"Internal error: {e}")
     return jsonify({"success": False, "error": "Internal server error"}), 500
+
+@app.route('/health')
+def health_check():
+    """Health check endpoint for Fly.io"""
+    try:
+        # Use text() for raw SQL expression
+        db.session.execute(text('SELECT 1'))
+        return jsonify({"status": "healthy", "database": "connected"}), 200
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        return jsonify({"status": "unhealthy", "error": str(e)}), 500
 
 @app.errorhandler(404)
 def not_found(e):
