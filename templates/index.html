@@ -447,6 +447,15 @@
         </div>
       </div>
 
+      <!-- Debug Section -->
+      <div class="alert alert-info mb-3" style="font-size: 12px;">
+        <strong>Debug Info:</strong> 
+        User Role: <span id="debugUserRole">{{ session.get('user_role', 'team_member') }}</span> | 
+        User Email: <span id="debugUserEmail">{{ session.get('user_email', 'Not set') }}</span>
+        <button class="btn btn-sm btn-outline-primary ms-2" onclick="loadProjectsFromServer()">Refresh Projects</button>
+        <button class="btn btn-sm btn-outline-secondary ms-2" onclick="checkTeamMember()">Check Team Member Status</button>
+      </div>
+
       <div id="projectsContainer" class="projects-grid"></div>
 
       <div class="gantt-card">
@@ -670,15 +679,33 @@
     }, 3000);
   }
 
-  // Load data from server on page load - UPDATED to use /api/my_projects
+  // Debug function to check team member status
+  async function checkTeamMember() {
+    try {
+      const response = await fetch('/api/check_team_member');
+      const data = await response.json();
+      console.log('Team member status:', data);
+      showToast(JSON.stringify(data, null, 2), 'info');
+    } catch (error) {
+      console.error('Error checking team member:', error);
+      showToast('Error checking team member status', 'danger');
+    }
+  }
+
+  // Load data from server on page load - UPDATED to use /api/my_projects with better logging
   async function loadProjectsFromServer() {
     try {
+      console.log('Fetching projects from /api/my_projects...');
       const response = await fetch('/api/my_projects');
+      console.log('Response status:', response.status);
       const data = await response.json();
+      console.log('Response data:', data);
+      
       if (data.success) {
+        console.log('Projects loaded:', data.projects.length);
         projectsData = data.projects;
         renderProjects('');
-        showToast('Projects synced from server', 'success');
+        showToast(`Loaded ${data.projects.length} projects from server`, 'success');
       } else {
         console.error('API returned error:', data.error);
         showToast('Failed to load projects: ' + (data.error || 'Unknown error'), 'danger');
@@ -1158,7 +1185,7 @@
                    </td>
                   <td>${task.start_date || '—'}</td>
                   <td>${task.end_date || '—'}</td>
-                </tr>
+                 </tr>
               `).join('') : '<tr><td colspan="4" class="text-center">No tasks available</td></tr>'}
             </tbody>
           </table>
