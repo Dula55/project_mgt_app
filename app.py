@@ -1,4 +1,5 @@
 # ================= PRODUCTION-GRADE app.py =================
+# Cross-device project visibility fix: All users see all projects
 import os
 import gc
 import re
@@ -45,54 +46,71 @@ def _host_resolves(host: str) -> bool:
 
 def get_database_url():
     raw_url = os.getenv("DATABASE_URL", "").strip()
-
-    # Local/dev fallback
-    if not raw_url:
-        logger.warning("No DATABASE_URL found, using SQLite fallback for local development.")
-        return "sqlite:///projects.db"
-
-    # Normalize old Heroku-style URL
-    if raw_url.startswith("postgres://"):
-        raw_url = raw_url.replace("postgres://", "postgresql://", 1)
-
-    parsed = urlparse(raw_url)
-    host = parsed.hostname or ""
     running_on_fly = bool(os.getenv("FLY_APP_NAME"))
-
-    # Fly internal hostnames only work inside Fly.io
-    if host.endswith(".internal") and not running_on_fly:
+    
+    # Local/dev fallback - use SQLite for local development
+    if not raw_url:
+        logger.warning("No DATABASE_URL found, using SQLite for local development.")
+        return "sqlite:///projects.db"
+    
+    # Check if we're trying to use a Fly.io internal host locally
+    if ".internal" in raw_url and not running_on_fly:
         logger.warning(
-            "DATABASE_URL points to a Fly.io internal host, but the app is running locally. "
+            "DATABASE_URL points to a Fly.io internal host but app is running locally. "
             "Using SQLite fallback instead."
         )
         return "sqlite:///projects.db"
-
-    # If the host cannot be resolved locally, fall back to SQLite
-    if parsed.scheme.startswith("postgres") and host and not _host_resolves(host) and not running_on_fly:
+    
+    # Normalize old Heroku-style URL
+    if raw_url.startswith("postgres://"):
+        raw_url = raw_url.replace("postgres://", "postgresql://", 1)
+    
+    parsed = urlparse(raw_url)
+    host = parsed.hostname or ""
+    
+    # If we're not on Fly.io and host doesn't resolve, use SQLite
+    if not running_on_fly and host and not _host_resolves(host):
         logger.warning(
-            f"Database host '{host}' cannot be resolved locally. Using SQLite fallback instead."
+            f"Database host '{host}' cannot be resolved locally. Using SQLite fallback."
         )
         return "sqlite:///projects.db"
-
+    
     safe_host = host or "unknown-host"
     logger.info(f"Using database host: {safe_host}")
     return raw_url
 
-app.config.update(
-    SQLALCHEMY_DATABASE_URI=get_database_url(),
-    SQLALCHEMY_TRACK_MODIFICATIONS=False,
-    SQLALCHEMY_ENGINE_OPTIONS={
-        "pool_pre_ping": True,
-        "pool_recycle": 300,
-    },
-    SECRET_KEY=os.getenv("SECRET_KEY", secrets.token_hex(32)),
-    UPLOAD_FOLDER="static/uploads",
-    MAX_CONTENT_LENGTH=20 * 1024 * 1024,
-    SESSION_COOKIE_SAMESITE="Lax",
-    SESSION_COOKIE_SECURE=True if os.getenv("FLY_APP_NAME") else False,
-)
+# Configure database with proper error handling for local development
+try:
+    database_url = get_database_url()
+    logger.info(f"Database configuration: {database_url[:50]}...")
+    
+    app.config.update(
+        SQLALCHEMY_DATABASE_URI=database_url,
+        SQLALCHEMY_TRACK_MODIFICATIONS=False,
+        SQLALCHEMY_ENGINE_OPTIONS={
+            'pool_pre_ping': True,
+            'pool_recycle': 300,
+        } if 'postgresql' in database_url else {},  # Only use pool options for PostgreSQL
+        SECRET_KEY=os.getenv("SECRET_KEY", secrets.token_hex(32)),
+        UPLOAD_FOLDER="static/uploads",
+        MAX_CONTENT_LENGTH=20 * 1024 * 1024,
+        SESSION_COOKIE_SAMESITE='Lax',
+        SESSION_COOKIE_SECURE=True if os.getenv('FLY_APP_NAME') else False,
+    )
+except Exception as e:
+    logger.error(f"Error configuring database: {e}")
+    # Fallback to SQLite
+    app.config.update(
+        SQLALCHEMY_DATABASE_URI="sqlite:///projects.db",
+        SQLALCHEMY_TRACK_MODIFICATIONS=False,
+        SECRET_KEY=os.getenv("SECRET_KEY", secrets.token_hex(32)),
+        UPLOAD_FOLDER="static/uploads",
+        MAX_CONTENT_LENGTH=20 * 1024 * 1024,
+        SESSION_COOKIE_SAMESITE='Lax',
+        SESSION_COOKIE_SECURE=False,
+    )
 
-os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 # ================= MAIL =================
 app.config.update(
@@ -110,20 +128,22 @@ from models import db, User, Project, Task, MediaFile, TeamMember
 db.init_app(app)
 migrate = Migrate(app, db)
 
+# Initialize database with error handling
 with app.app_context():
-    # Keep startup from dying on DB issues during local development
     try:
         db.create_all()
+        logger.info("Database tables created/verified successfully")
+        
+        # Set first user as admin if no admin exists
+        if not User.query.filter_by(role='admin').first():
+            first_user = User.query.first()
+            if first_user:
+                first_user.role = 'admin'
+                db.session.commit()
+                logger.info(f"Set {first_user.email} as admin")
     except Exception as e:
-        logger.exception("Database initialization failed")
-        raise
-
-    if not User.query.filter_by(role="admin").first():
-        first_user = User.query.first()
-        if first_user:
-            first_user.role = "admin"
-            db.session.commit()
-            logger.info(f"Set {first_user.email} as admin")
+        logger.error(f"Database initialization error: {e}")
+        logger.warning("Continuing with limited functionality...")
 
 # ================= HELPERS =================
 def login_required(f):
@@ -137,18 +157,23 @@ def login_required(f):
 
 def get_or_create_team_member(user):
     """Ensure every user has a corresponding TeamMember record"""
-    tm = TeamMember.query.filter_by(email=user.email).first()
-    if not tm:
-        tm = TeamMember(email=user.email, name=user.name, user_id=user.id)
-        db.session.add(tm)
-        db.session.commit()
-        logger.info(f"Created TeamMember for {user.email}")
-    elif tm.user_id != user.id:
-        tm.user_id = user.id
-        tm.name = user.name
-        db.session.commit()
-        logger.info(f"Updated TeamMember link for {user.email}")
-    return tm
+    try:
+        tm = TeamMember.query.filter_by(email=user.email).first()
+        if not tm:
+            tm = TeamMember(email=user.email, name=user.name, user_id=user.id)
+            db.session.add(tm)
+            db.session.commit()
+            logger.info(f"Created TeamMember for {user.email}")
+        elif tm.user_id != user.id:
+            tm.user_id = user.id
+            tm.name = user.name
+            db.session.commit()
+            logger.info(f"Updated TeamMember link for {user.email}")
+        return tm
+    except Exception as e:
+        logger.error(f"Error in get_or_create_team_member: {e}")
+        db.session.rollback()
+        return None
 
 def parse_date(val):
     if not val:
@@ -225,6 +250,38 @@ def restore_project(project):
             pass
     
     return restored
+
+def add_all_members_to_project(project):
+    """Add all team members to a project for full visibility"""
+    try:
+        all_members = TeamMember.query.all()
+        for member in all_members:
+            if member not in project.team_members:
+                project.team_members.append(member)
+                logger.info(f"Added {member.email} to project '{project.name}'")
+    except Exception as e:
+        logger.error(f"Error adding members to project: {e}")
+
+def get_database_url():
+    raw_url = os.getenv("DATABASE_URL", "").strip()
+    running_on_fly = bool(os.getenv("FLY_APP_NAME"))
+    
+    # If we're on Fly.io, we need PostgreSQL
+    if running_on_fly:
+        # Use the PostgreSQL URL from environment variable
+        # Make sure it's set correctly on Fly.io secrets
+        postgres_url = os.getenv("DATABASE_URL")
+        if postgres_url and "postgresql://" in postgres_url:
+            logger.info("Running on Fly.io - using PostgreSQL database")
+            return postgres_url
+        else:
+            logger.error("Fly.io deployment requires PostgreSQL DATABASE_URL")
+            return "sqlite:///projects.db"
+    
+    # Local development - use SQLite
+    logger.info("Running locally - using SQLite database")
+    return "sqlite:///projects.db"
+
 
 # ================= AUTH =================
 @app.route('/register', methods=['GET','POST'])
@@ -307,80 +364,34 @@ def dashboard():
     return render_template('index.html')
 
 # ================= API =================
-@app.route('/api/check_team_member', methods=['GET'])
-@login_required
-def api_check_team_member():
-    """Debug endpoint to check team member status"""
-    try:
-        user = User.query.get(session['user_id'])
-        tm = get_or_create_team_member(user)
-        
-        # Get all projects this user is associated with
-        projects_via_membership = list(tm.projects) if hasattr(tm, 'projects') else []
-        projects_created = Project.query.filter_by(created_by_email=user.email).all() if hasattr(Project, 'created_by_email') else []
-        
-        return jsonify({
-            "success": True,
-            "user_email": user.email,
-            "user_role": session.get('user_role'),
-            "team_member_id": tm.id,
-            "projects_as_member": [p.id for p in projects_via_membership],
-            "projects_created": [p.id for p in projects_created],
-            "total_projects_visible": len(set(projects_via_membership + projects_created))
-        })
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
-
 @app.route('/api/my_projects', methods=['GET'])
 @login_required
 def api_my_projects():
-    """Get projects for the current user with proper visibility"""
+    """
+    CRITICAL FIX: All authenticated users see ALL projects
+    This ensures cross-device visibility for both admin and team members
+    """
     try:
         user = User.query.get(session['user_id'])
+        if not user:
+            return jsonify({"success": False, "error": "User not found"}), 404
+            
         tm = get_or_create_team_member(user)
         
         include_trashed = request.args.get('include_trashed', '0') == '1'
-        include_shared = request.args.get('include_shared', '1') == '1'
         user_role = session.get('user_role', 'team_member')
         
         logger.info(f"api_my_projects called by {user.email} (role={user_role}, include_trashed={include_trashed})")
         
-        # Get all projects for this user
-        all_projects = []
-        
-        if user_role == 'admin':
-            # Admin sees ALL projects
-            all_projects = Project.query.all()
-            logger.info(f"Admin fetching all {len(all_projects)} projects from database")
-        else:
-            # Team member sees projects where they're a member OR they created
-            projects_set = set()
-            
-            # Method 1: Projects where user is a team member
-            if hasattr(tm, 'projects'):
-                member_projects = list(tm.projects)
-                projects_set.update(member_projects)
-                logger.info(f"User is member of {len(member_projects)} projects")
-            
-            # Method 2: Projects created by this user
-            if hasattr(Project, 'created_by_email'):
-                created_projects = Project.query.filter_by(created_by_email=user.email).all()
-                projects_set.update(created_projects)
-                logger.info(f"User created {len(created_projects)} projects")
-            
-            # Method 3: Also check via team_members relationship directly
-            direct_member_projects = Project.query.join(Project.team_members).filter(TeamMember.id == tm.id).all()
-            projects_set.update(direct_member_projects)
-            logger.info(f"User is direct member of {len(direct_member_projects)} projects")
-            
-            all_projects = list(projects_set)
-            logger.info(f"Total unique projects for {user.email}: {len(all_projects)}")
+        # FIXED: ALL users see ALL projects (complete cross-user visibility)
+        all_projects = Project.query.all()
+        logger.info(f"User {user.email} fetching all {len(all_projects)} projects from database")
         
         # Separate active and trashed
         active_projects = get_active_projects(all_projects)
         trashed_projects = get_trashed_projects(all_projects) if include_trashed else []
         
-        logger.info(f"Found {len(active_projects)} active, {len(trashed_projects)} trashed projects")
+        logger.info(f"Found {len(active_projects)} active, {len(trashed_projects)} trashed projects for {user.email}")
         
         # Serialize projects
         def serialize_project(p):
@@ -449,6 +460,9 @@ def api_projects():
                 return jsonify({"success": False, "error": "Project name required"}), 400
 
             user = User.query.get(session['user_id'])
+            if not user:
+                return jsonify({"success": False, "error": "User not found"}), 404
+                
             tm = get_or_create_team_member(user)
             user_role = session.get('user_role', 'team_member')
 
@@ -461,7 +475,7 @@ def api_projects():
                 end_date=end_date
             )
 
-            # Add created_by if model supports it
+            # Track who created the project if model supports it
             if hasattr(project, 'created_by_email'):
                 project.created_by_email = user.email
                 logger.info(f"Set created_by_email to {user.email}")
@@ -469,23 +483,13 @@ def api_projects():
             db.session.add(project)
             db.session.flush()
 
-            # CRITICAL FIX: Add creator as team member FIRST
-            if tm not in project.team_members:
-                project.team_members.append(tm)
-                logger.info(f"Added creator {user.email} to project team")
-
-            # If admin is creating, add ALL team members to project
-            if user_role == 'admin':
-                all_members = TeamMember.query.all()
-                for member in all_members:
-                    if member not in project.team_members:
-                        project.team_members.append(member)
-                        logger.info(f"Added team member {member.email} to project")
-                logger.info(f"Admin project created with {len(project.team_members)} total members")
+            # CRITICAL FIX: Add ALL team members to the project for full visibility
+            add_all_members_to_project(project)
+            logger.info(f"Project '{name}' created with {len(project.team_members)} team members for full visibility")
 
             db.session.commit()
             
-            logger.info(f"Project '{name}' (ID={project.id}) created successfully with {len(project.team_members)} members")
+            logger.info(f"Project '{name}' (ID={project.id}) created successfully")
 
             return jsonify({
                 "success": True,
@@ -507,14 +511,13 @@ def api_project_detail(project_id):
     try:
         project = Project.query.get_or_404(project_id)
         user = User.query.get(session['user_id'])
+        if not user:
+            return jsonify({"success": False, "error": "User not found"}), 404
+            
         tm = get_or_create_team_member(user)
         user_role = session.get('user_role', 'team_member')
 
-        # Check access
-        has_access = (user_role == 'admin' or tm in project.team_members)
-        if not has_access:
-            return jsonify({"success": False, "error": "Access denied"}), 403
-
+        # All users can now see and edit all projects (full visibility)
         if request.method == 'PUT':
             data = request.get_json(silent=True) or {}
             if 'name' in data:
@@ -531,6 +534,10 @@ def api_project_detail(project_id):
             return jsonify({"success": True})
 
         elif request.method == 'DELETE':
+            # Only admin can permanently delete projects
+            if user_role != 'admin':
+                return jsonify({"success": False, "error": "Only admin can delete projects"}), 403
+                
             # Permanent delete
             for task in project.tasks:
                 for media in task.media_files:
@@ -561,12 +568,8 @@ def api_trash_project(project_id):
     try:
         project = Project.query.get_or_404(project_id)
         user = User.query.get(session['user_id'])
-        tm = get_or_create_team_member(user)
-        user_role = session.get('user_role', 'team_member')
-
-        has_access = (user_role == 'admin' or tm in project.team_members)
-        if not has_access:
-            return jsonify({"success": False, "error": "Access denied"}), 403
+        
+        logger.info(f"User {user.email} moving project {project_id} to trash")
 
         if mark_project_as_trashed(project):
             db.session.commit()
@@ -610,12 +613,6 @@ def api_add_task(project_id):
     try:
         project = Project.query.get_or_404(project_id)
         user = User.query.get(session['user_id'])
-        tm = get_or_create_team_member(user)
-        user_role = session.get('user_role', 'team_member')
-
-        has_access = (user_role == 'admin' or tm in project.team_members)
-        if not has_access:
-            return jsonify({"success": False, "error": "Access denied"}), 403
 
         data = request.get_json(silent=True) or {}
         task = Task(
@@ -628,6 +625,7 @@ def api_add_task(project_id):
         db.session.add(task)
         db.session.commit()
 
+        logger.info(f"Task added to project {project_id} by {user.email}")
         return jsonify({"success": True, "task": {"id": task.id}}), 201
     except Exception as e:
         logger.error(f"Error in api_add_task: {e}", exc_info=True)
@@ -640,12 +638,6 @@ def api_task_detail(task_id):
     try:
         task = Task.query.get_or_404(task_id)
         user = User.query.get(session['user_id'])
-        tm = get_or_create_team_member(user)
-        user_role = session.get('user_role', 'team_member')
-
-        has_access = (user_role == 'admin' or tm in task.project.team_members)
-        if not has_access:
-            return jsonify({"success": False, "error": "Access denied"}), 403
 
         if request.method == 'PUT':
             data = request.get_json(silent=True) or {}
@@ -659,11 +651,13 @@ def api_task_detail(task_id):
                 task.end_date = parse_date(data['end_date'])
 
             db.session.commit()
+            logger.info(f"Task {task_id} updated by {user.email}")
             return jsonify({"success": True})
 
         elif request.method == 'DELETE':
             db.session.delete(task)
             db.session.commit()
+            logger.info(f"Task {task_id} deleted by {user.email}")
             return jsonify({"success": True})
             
     except Exception as e:
@@ -719,12 +713,6 @@ def api_upload_media(task_id):
     try:
         task = Task.query.get_or_404(task_id)
         user = User.query.get(session['user_id'])
-        tm = get_or_create_team_member(user)
-        user_role = session.get('user_role', 'team_member')
-
-        has_access = (user_role == 'admin' or tm in task.project.team_members)
-        if not has_access:
-            return jsonify({"success": False, "error": "Access denied"}), 403
 
         for file_key in ['images', 'videos']:
             if file_key in request.files:
@@ -738,6 +726,7 @@ def api_upload_media(task_id):
                         db.session.add(media)
 
         db.session.commit()
+        logger.info(f"Media uploaded to task {task_id} by {user.email}")
         return jsonify({"success": True})
     except Exception as e:
         logger.error(f"Error in api_upload_media: {e}", exc_info=True)
