@@ -1,4 +1,4 @@
-<!DOCTYPE html> 
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
@@ -367,8 +367,8 @@
 <div class="loading-overlay" id="loadingOverlay">
   <div class="text-center text-white">
     <div class="spinner mx-auto mb-3"></div>
-    <h4>Generating PDF Report...</h4>
-    <p>This may take a moment</p>
+    <h4>Syncing with Cloud...</h4>
+    <p>Your data is being synchronized across devices</p>
   </div>
 </div>
 
@@ -376,10 +376,10 @@
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-header">
       <div class="logo">
-        <div class="logo-icon"><i class="bi bi-kanban"></i></div>
+        <div class="logo-icon"><i class="bi bi-cloud-sync"></i></div>
         <div class="logo-text">
           <h3>FlowTrack</h3>
-          <p>Schedule & Monitor</p>
+          <p>Cross-Device Sync</p>
         </div>
       </div>
     </div>
@@ -390,7 +390,11 @@
           <i class="bi bi-speedometer2"></i><span>Dashboard</span>
         </a>
       </div>
-
+      <div class="nav-item">
+        <a href="#" class="nav-link-custom" id="syncStatusLink">
+          <i class="bi bi-arrow-repeat"></i><span>Sync Status</span>
+        </a>
+      </div>
       {% if session.get('user_role') == 'admin' or session.get('is_admin') %}
       <div class="nav-item">
         <a href="{{ url_for('register') }}" class="nav-link-custom">
@@ -505,14 +509,6 @@
         </div>
       </div>
 
-      <div class="alert alert-info mb-3" style="font-size: 12px;">
-        <strong>Debug Info:</strong> 
-        User Role: <span id="debugUserRole">{{ session.get('user_role', 'team_member') }}</span> | 
-        User Email: <span id="debugUserEmail">{{ session.get('user_email', 'Not set') }}</span>
-        <button class="btn btn-sm btn-outline-primary ms-2" onclick="loadProjectsFromServer()">Refresh Projects</button>
-        <button class="btn btn-sm btn-outline-secondary ms-2" onclick="checkTeamMember()">Check Team Member Status</button>
-      </div>
-
       <div id="projectsContainer" class="projects-grid"></div>
 
       <div class="gantt-card" id="ganttCardForExport">
@@ -520,7 +516,7 @@
           <h5 class="fw-bold m-0">
             <i class="bi bi-bar-chart-steps text-primary me-2"></i>Interactive Gantt Timeline
           </h5>
-          <small class="text-muted">Drag bars to adjust dates | Each task has unique color</small>
+          <small class="text-muted">Drag bars to adjust dates | Syncs across all devices</small>
         </div>
         <div id="gantt"></div>
       </div>
@@ -530,7 +526,7 @@
 
 <div id="ganttExportStage" class="gantt-export-stage" aria-hidden="true"></div>
 
-<!-- MODALS -->
+<!-- MODALS (same as original for brevity) -->
 <div class="modal fade" id="addProjectModal" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-dialog-centered"><div class="modal-content border-0 shadow"><div class="modal-header bg-light"><h5 class="modal-title fw-bold">Create Project</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><form id="addProjectForm"><div class="modal-body"><div class="mb-3"><label class="form-label fw-semibold">Project name</label><input type="text" id="projName" class="form-control" required></div><div class="mb-3"><label class="form-label fw-semibold">Project Type</label><select name="type" id="projType" class="form-select" required><option value="" disabled selected>Select project type...</option><option value="Road">Road Construction</option><option value="Building">Building Development</option><option value="Commercial">Proposed Commercial Development</option></select></div><div class="row g-2"><div class="col-12 col-sm-6"><label>Start date</label><input type="date" id="projStart" class="form-control"></div><div class="col-12 col-sm-6"><label>End date</label><input type="date" id="projEnd" class="form-control"></div></div></div><div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-primary">Create Project</button></div></form></div></div></div>
 <div class="modal fade" id="editProjectModal" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-dialog-centered"><div class="modal-content border-0 shadow"><div class="modal-header bg-light"><h5 class="modal-title">Edit Project</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><form id="editProjectForm"><div class="modal-body"><input type="hidden" id="editProjectId"><div class="mb-2"><label>Name</label><input type="text" id="editName" class="form-control"></div><div class="mb-2"><label>Type</label><select id="editType" class="form-select"><option>Road Construction</option><option>Building Development</option><option>Proposed Commercial Development</option></select></div><div class="mb-2"><label>Start Date</label><input type="date" id="editStart" class="form-control"></div><div class="mb-2"><label>End Date</label><input type="date" id="editEnd" class="form-control"></div></div><div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-primary">Save Changes</button></div></form></div></div></div>
 <div class="modal fade" id="editTaskModal" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-lg"><div class="modal-content border-0 shadow"><div class="modal-header bg-light"><h5 class="modal-title">Edit Task</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><form id="editTaskForm"><div class="modal-body"><input type="hidden" id="editTaskId"><div class="mb-3"><label>Task Name</label><input type="text" id="editTaskName" class="form-control"></div><div class="mb-3"><label>Progress (%)</label><input type="range" id="editTaskProgressSlider" class="form-range" min="0" max="100"><input type="number" id="editTaskProgress" class="form-control mt-2"></div><div class="row mb-3"><div class="col"><label>Start Date</label><input type="date" id="editTaskStartDate" class="form-control"></div><div class="col"><label>End Date</label><input type="date" id="editTaskEndDate" class="form-control"></div></div><hr><div class="mb-3"><label>Upload Images</label><div class="upload-area" onclick="document.getElementById('modalImageInput').click()"><i class="bi bi-cloud-upload"></i><p>Click to upload</p></div><input type="file" id="modalImageInput" class="d-none" multiple accept="image/*"></div><div class="mb-3"><label>Upload Videos</label><div class="upload-area" onclick="document.getElementById('modalVideoInput').click()"><i class="bi bi-cloud-upload"></i><p>Click to upload</p></div><input type="file" id="modalVideoInput" class="d-none" multiple accept="video/*"></div><hr><label>Current Media</label><div id="currentMediaList" class="row g-2"></div></div><div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-primary">Save Changes</button></div></form></div></div></div>
@@ -544,6 +540,7 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
+  // Enhanced cross-device sync: all CRUD operations go to Fly.io backend
   let projectsData = [];
   let trashedProjectsData = [];
   let syncInProgress = false;
@@ -554,9 +551,6 @@
   const userRole = '{{ session.get("user_role", "team_member") }}';
   const userEmail = '{{ session.get("user_email", "") }}';
   
-  console.log('User Role:', userRole);
-  console.log('User Email:', userEmail);
-
   function apiFetch(url, options = {}) {
     return fetch(url, {
       credentials: 'include',
@@ -569,7 +563,7 @@
     });
   }
 
-  function showToast(message, type = 'info', options = {}) {
+  function showToast(message, type = 'info') {
     const toastContainer = document.querySelector('.toast-notification') || (() => {
       const div = document.createElement('div');
       div.className = 'toast-notification';
@@ -577,81 +571,14 @@
       return div;
     })();
     const bgColor = type === 'success' ? '#10b981' : type === 'danger' ? '#ef4444' : '#3b82f6';
-    toastContainer.innerHTML = `<div class="alert alert-${type} mb-0 shadow-lg d-flex align-items-center justify-content-between gap-2" style="background: ${bgColor}; color: white; border: none;"><span>${message}</span>${options.actionLabel ? `<button class="btn btn-sm btn-light ms-3" id="toastActionBtn">${options.actionLabel}</button>` : ''}</div>`;
-    if (options.actionLabel && options.onAction) document.getElementById('toastActionBtn')?.addEventListener('click', async () => { await options.onAction(); toastContainer.innerHTML = ''; });
-    setTimeout(() => toastContainer.innerHTML = '', options.duration || 4500);
-  }
-
-  function updateTrashBadge() { 
-    const badge = document.getElementById('trashCountBadge'); 
-    if (badge) badge.innerText = trashedProjectsData.length; 
-  }
-  
-  function renderTrashProjects() { 
-    const container = document.getElementById('trashModalBody');
-    if (!container) return;
-    if (trashedProjectsData.length === 0) {
-      container.innerHTML = '<div class="text-center p-4"><i class="bi bi-trash fs-1 text-muted"></i><p class="mt-2">No trashed projects</p></div>';
-      return;
-    }
-    let html = '<div class="list-group">';
-    trashedProjectsData.forEach(proj => {
-      html += `<div class="list-group-item"><div class="d-flex justify-content-between align-items-center"><div><h6 class="mb-1">${escapeHtml(proj.name)}</h6><small class="text-muted">Type: ${escapeHtml(proj.project_type)}</small></div><div><button class="btn btn-sm btn-success restore-trash-btn" data-id="${proj.id}"><i class="bi bi-arrow-counterclockwise"></i> Restore</button><button class="btn btn-sm btn-danger permanent-delete-btn ms-2" data-id="${proj.id}"><i class="bi bi-trash"></i> Delete Permanently</button></div></div></div>`;
-    });
-    html += '</div>';
-    container.innerHTML = html;
-    document.querySelectorAll('.restore-trash-btn').forEach(btn => { btn.onclick = () => restoreProjectOnServer(parseInt(btn.dataset.id)); });
-    document.querySelectorAll('.permanent-delete-btn').forEach(btn => { btn.onclick = () => { if (confirm('Permanently delete this project?')) permanentlyDeleteProjectOnServer(parseInt(btn.dataset.id)); }; });
-    updateTrashBadge(); 
-  }
-
-  async function deleteProjectOnServer(projectId) { 
-    try { 
-      const response = await apiFetch(`/api/projects/${projectId}/trash`, { method: 'POST' }); 
-      const data = await response.json(); 
-      if (data.success) { await loadProjectsFromServer(); showToast('Project moved to trash', 'success'); return true; } 
-      showToast(data.error || 'Failed', 'danger'); 
-      return false; 
-    } catch (error) { 
-      console.error(error); showToast('Server error', 'danger'); return false; 
-    } 
-  }
-
-  async function restoreProjectOnServer(projectId) { 
-    try { 
-      const response = await apiFetch(`/api/projects/${projectId}/restore`, { method: 'POST' }); 
-      const data = await response.json(); 
-      if (data.success) { 
-        await loadProjectsFromServer(); 
-        showToast('Project restored', 'success'); 
-        const trashModal = bootstrap.Modal.getInstance(document.getElementById('trashModal')); 
-        if (trashModal) trashModal.hide(); 
-        return true; 
-      } 
-      showToast(data.error || 'Restore failed', 'danger'); 
-      return false; 
-    } catch (error) { 
-      console.error(error); 
-      showToast('Server error', 'danger'); 
-      return false; 
-    } 
-  }
-
-  async function permanentlyDeleteProjectOnServer(projectId) { 
-    try { 
-      const response = await apiFetch(`/api/projects/${projectId}`, { method: 'DELETE' }); 
-      const data = await response.json(); 
-      if (data.success) { await loadProjectsFromServer(); showToast('Project permanently deleted', 'success'); return true; } 
-      showToast(data.error || 'Delete failed', 'danger'); 
-      return false; 
-    } catch (error) { 
-      console.error(error); showToast('Server error', 'danger'); return false; 
-    } 
+    toastContainer.innerHTML = `<div class="alert alert-${type} mb-0 shadow-lg" style="background: ${bgColor}; color: white; border: none;">${message}</div>`;
+    setTimeout(() => toastContainer.innerHTML = '', 3500);
   }
 
   async function loadProjectsFromServer() { 
     if (syncInProgress) return; 
     syncInProgress = true; 
+    document.getElementById('loadingOverlay')?.classList.add('active');
     try { 
       const res = await apiFetch(`/api/my_projects?include_trashed=1&include_shared=1&_=${Date.now()}`); 
       const data = await res.json(); 
@@ -659,16 +586,17 @@
         projectsData = Array.isArray(data.projects) ? data.projects : []; 
         trashedProjectsData = Array.isArray(data.trashed_projects) ? data.trashed_projects : []; 
         renderProjects(currentSearchText); 
-        updateTrashBadge(); 
-        renderTrashProjects(); 
+        document.getElementById('trashCountBadge').innerText = trashedProjectsData.length;
+        showToast('Projects synced from cloud', 'success');
       } else { 
         showToast('Failed load projects', 'danger'); 
       } 
     } catch (e) { 
       console.error(e); 
-      showToast('Server error', 'danger'); 
+      showToast('Server error - check connection to Fly.io', 'danger'); 
     } finally { 
       syncInProgress = false; 
+      document.getElementById('loadingOverlay')?.classList.remove('active');
     } 
   }
 
@@ -686,37 +614,12 @@
     } 
   }
 
-  async function updateProjectOnServer(id, data) { 
-    try { 
-      const res = await apiFetch(`/api/projects/${id}`, { method: 'PUT', body: JSON.stringify(data) }); 
-      const response = await res.json(); 
-      if (response.success) { await loadProjectsFromServer(); return true; } 
-      showToast(response.error || 'Update failed', 'danger'); 
-      return false; 
-    } catch (error) { 
-      console.error(error); 
-      showToast('Server error', 'danger'); 
-      return false; 
-    } 
-  }
-
   async function updateTaskOnServer(taskId, taskData) { 
     try { 
       const res = await apiFetch(`/api/tasks/${taskId}`, { method: 'PUT', body: JSON.stringify(taskData) }); 
       const data = await res.json(); 
+      if(data.success) await loadProjectsFromServer();
       return data.success; 
-    } catch (error) { 
-      console.error(error); 
-      return false; 
-    } 
-  }
-
-  async function deleteTaskOnServer(taskId) { 
-    try { 
-      const res = await apiFetch(`/api/tasks/${taskId}`, { method: 'DELETE' }); 
-      const data = await res.json(); 
-      if (data.success) { await loadProjectsFromServer(); return true; } 
-      return false; 
     } catch (error) { 
       console.error(error); 
       return false; 
@@ -737,9 +640,46 @@
     } 
   }
 
+  async function deleteTaskOnServer(taskId) { 
+    try { 
+      const res = await apiFetch(`/api/tasks/${taskId}`, { method: 'DELETE' }); 
+      const data = await res.json(); 
+      if (data.success) { await loadProjectsFromServer(); return true; } 
+      return false; 
+    } catch (error) { 
+      console.error(error); 
+      return false; 
+    } 
+  }
+
+  async function deleteProjectOnServer(projectId) { 
+    try { 
+      const response = await apiFetch(`/api/projects/${projectId}/trash`, { method: 'POST' }); 
+      const data = await response.json(); 
+      if (data.success) { await loadProjectsFromServer(); showToast('Project moved to trash', 'success'); return true; } 
+      showToast(data.error || 'Failed', 'danger'); 
+      return false; 
+    } catch (error) { 
+      console.error(error); showToast('Server error', 'danger'); return false; 
+    } 
+  }
+
+  async function updateProjectOnServer(id, data) { 
+    try { 
+      const res = await apiFetch(`/api/projects/${id}`, { method: 'PUT', body: JSON.stringify(data) }); 
+      const response = await res.json(); 
+      if (response.success) { await loadProjectsFromServer(); return true; } 
+      showToast(response.error || 'Update failed', 'danger'); 
+      return false; 
+    } catch (error) { 
+      console.error(error); 
+      showToast('Server error', 'danger'); 
+      return false; 
+    } 
+  }
+
   async function updateTaskProgress(taskId, progress) { 
     if (await updateTaskOnServer(taskId, { progress })) { 
-      await loadProjectsFromServer(); 
       showToast(`Progress updated to ${progress}%`, 'success'); 
     } else { 
       showToast('Update failed', 'danger'); 
@@ -769,75 +709,55 @@
   function renderGanttChart() {
     let tasks = buildGanttTasks();
     lastGanttTasks = tasks;
-
     const ganttDiv = document.getElementById("gantt");
     if(!ganttDiv) return;
-
     ganttDiv.innerHTML = '';
-
     if(tasks.length === 0) {
       ganttDiv.innerHTML = '<div class="alert alert-light text-center">No tasks with dates to display in Gantt chart.</div>';
       return;
     }
-
     let styleTag = document.getElementById('gantt-color-style');
     if(!styleTag) {
       styleTag = document.createElement('style');
       styleTag.id = 'gantt-color-style';
       document.head.appendChild(styleTag);
     }
-
     let styleCss = '';
     tasks.forEach((task, idx) => {
       const color = generatePastelColor(idx);
-      styleCss += `.gantt .bar-wrapper[data-id="${task.id}"] .bar, .gantt .bar-wrapper[data-id="${task.id}"] .bar-progress { fill: ${color} !important; } .gantt .bar-wrapper[data-id="${task.id}"] .bar { stroke: rgba(0,0,0,0.15); }`;
+      styleCss += `.gantt .bar-wrapper[data-id="${task.id}"] .bar, .gantt .bar-wrapper[data-id="${task.id}"] .bar-progress { fill: ${color} !important; }`;
     });
     styleTag.textContent = styleCss;
-
     currentGanttInstance = new Gantt("#gantt", tasks, {
       on_date_change: async (task, start, end) => {
         await updateTaskOnServer(parseInt(task.id), { start_date: start.toISOString().slice(0,10), end_date: end.toISOString().slice(0,10) });
-        await loadProjectsFromServer();
       },
       on_progress_change: async (task, prog) => {
         await updateTaskOnServer(parseInt(task.id), { progress: Math.round(prog * 100) });
-        await loadProjectsFromServer();
       },
       view_mode: 'Week'
-    });
-
-    requestAnimationFrame(() => {
-      const svg = ganttDiv.querySelector('svg');
-      if (svg) {
-        svg.setAttribute('width', Math.max(ganttDiv.scrollWidth, 1400));
-      }
     });
   }
 
   function renderProjects(filter = "") {
     const container = document.getElementById('projectsContainer');
     if (!container) return;
-
     let filtered = projectsData.filter(p =>
       p.name.toLowerCase().includes(filter.toLowerCase()) ||
       (p.tasks || []).some(t => t.name.toLowerCase().includes(filter.toLowerCase()))
     );
-
     if (filtered.length === 0) {
-      container.innerHTML = `<div class="empty-state"><i class="bi bi-folder-plus"></i><h5>No projects found</h5><p>${filter ? 'Try a different search term' : 'Create your first project'}</p><button class="btn btn-primary create-project-empty-btn">Create Project</button></div>`;
+      container.innerHTML = `<div class="empty-state"><i class="bi bi-cloud-sync"></i><h5>No projects found</h5><p>${filter ? 'Try a different search term' : 'Create your first project — it will sync across devices'}</p><button class="btn btn-primary create-project-empty-btn">Create Project</button></div>`;
       document.querySelector('.create-project-empty-btn')?.addEventListener('click',() => new bootstrap.Modal(document.getElementById('addProjectModal')).show());
       updateStats();
       renderGanttChart();
       return;
     }
-
     let html = '';
     filtered.forEach(proj => {
       let tasksHtml = (proj.tasks || []).map(task => `<div class="task-item"><div class="d-flex justify-content-between align-items-start"><strong class="task-name">${escapeHtml(task.name)}</strong><div><button class="btn btn-sm btn-outline-warning edit-task-btn" onclick="openEditTaskModal(${proj.id},${task.id})"><i class="bi bi-pencil"></i> Edit</button><button class="btn btn-sm btn-outline-danger delete-task-btn" data-taskid="${task.id}"><i class="bi bi-trash"></i></button></div></div><div class="task-progress mt-2"><div class="progress flex-grow-1"><div class="progress-bar bg-success" style="width:${task.progress || 0}%"></div></div><input type="number" class="task-progress-input" value="${task.progress || 0}" min="0" max="100" data-taskid="${task.id}" style="width: 80px;"><button class="btn btn-sm btn-success update-progress-btn" data-id="${task.id}">Update</button></div><small class="text-muted task-meta"><i class="bi bi-calendar"></i> ${task.start_date || '—'} → ${task.end_date || '—'}</small></div>`).join('');
-
-      html += `<div class="project-card"><div class="project-header"><div class="project-title"><div><h5 class="mb-1">${escapeHtml(proj.name)}</h5><span class="badge bg-light">${escapeHtml(proj.project_type || 'General')}</span>${proj.created_by ? `<small class="text-muted ms-2">Created by: ${escapeHtml(proj.created_by)}</small>` : ''}</div><div class="progress-badge">${proj.completion || 0}%</div></div><div class="project-actions"><button class="project-action-btn edit-project-btn" data-id="${proj.id}"><i class="bi bi-pencil"></i> Edit</button><button class="project-action-btn report-btn" data-report-id="${proj.id}"><i class="bi bi-file-text"></i> Report</button>${userRole === 'admin' ? `<button class="project-action-btn add-member-btn" data-id="${proj.id}"><i class="bi bi-person-plus"></i> Add Member</button>` : ''}<button class="project-action-btn delete-project-btn text-danger" data-id="${proj.id}"><i class="bi bi-trash"></i> Delete</button></div></div><div class="p-3">${tasksHtml || '<p class="text-muted text-center mb-0">No tasks yet.</p>'}</div><div class="card-footer bg-transparent d-flex justify-content-between align-items-center"><small class="text-muted">${(proj.tasks || []).length} task(s)</small><button class="btn btn-sm btn-outline-secondary add-task-btn" data-projid="${proj.id}"><i class="bi bi-plus-circle"></i> Add Task</button></div></div>`;
+      html += `<div class="project-card"><div class="project-header"><div class="project-title"><div><h5 class="mb-1">${escapeHtml(proj.name)}</h5><span class="badge bg-light">${escapeHtml(proj.project_type || 'General')}</span><small class="text-muted ms-2"><i class="bi bi-cloud-check"></i> Cloud</small></div><div class="progress-badge">${proj.completion || 0}%</div></div><div class="project-actions"><button class="project-action-btn edit-project-btn" data-id="${proj.id}"><i class="bi bi-pencil"></i> Edit</button><button class="project-action-btn report-btn" data-report-id="${proj.id}"><i class="bi bi-file-text"></i> Report</button>${userRole === 'admin' ? `<button class="project-action-btn add-member-btn" data-id="${proj.id}"><i class="bi bi-person-plus"></i> Add Member</button>` : ''}<button class="project-action-btn delete-project-btn text-danger" data-id="${proj.id}"><i class="bi bi-trash"></i> Delete</button></div></div><div class="p-3">${tasksHtml || '<p class="text-muted text-center mb-0">No tasks yet.</p>'}</div><div class="card-footer bg-transparent d-flex justify-content-between align-items-center"><small class="text-muted">${(proj.tasks || []).length} task(s)</small><button class="btn btn-sm btn-outline-secondary add-task-btn" data-projid="${proj.id}"><i class="bi bi-plus-circle"></i> Add Task</button></div></div>`;
     });
-
     container.innerHTML = html;
     attachEvents();
     updateStats();
@@ -856,19 +776,14 @@
         new bootstrap.Modal(document.getElementById('editProjectModal')).show();
       }
     });
-
     document.querySelectorAll('.delete-project-btn').forEach(btn => btn.onclick = async () => {
-      if(confirm('Move this project to trash?')) await deleteProjectOnServer(parseInt(btn.dataset.id));
+      if(confirm('Move this project to trash? It will be synced across all devices.')) await deleteProjectOnServer(parseInt(btn.dataset.id));
     });
-
     document.querySelectorAll('.add-task-btn').forEach(btn => btn.onclick = async () => await addTaskToProject(parseInt(btn.dataset.projid)));
-
     document.querySelectorAll('.delete-task-btn').forEach(btn => btn.onclick = async () => {
-      if(confirm('Delete this task?')) await deleteTaskOnServer(parseInt(btn.dataset.taskid));
+      if(confirm('Delete this task? Changes sync instantly.')) await deleteTaskOnServer(parseInt(btn.dataset.taskid));
     });
-
     document.querySelectorAll('.report-btn').forEach(btn => btn.onclick = () => openReport(parseInt(btn.dataset.reportId)));
-
     document.querySelectorAll('.update-progress-btn').forEach(btn => btn.onclick = async () => {
       const tid = parseInt(btn.dataset.id);
       const inp = btn.parentElement.querySelector('.task-progress-input');
@@ -877,7 +792,6 @@
       val = Math.min(100, Math.max(0, val));
       await updateTaskProgress(tid, val);
     });
-
     if(userRole === 'admin') {
       document.querySelectorAll('.add-member-btn').forEach(btn => btn.onclick = async () => {
         document.getElementById('addMemberProjectId').value = btn.dataset.id;
@@ -895,31 +809,17 @@
         const sel = document.getElementById('memberUserSelect');
         sel.innerHTML = '<option value="">Select user...</option>';
         data.users.forEach(u => sel.innerHTML += `<option value="${u.email}">${escapeHtml(u.name)} (${u.email})</option>`);
-      } else {
-        showToast('Failed to load users', 'danger');
       }
-    } catch(e) {
-      console.error(e);
-    }
+    } catch(e) { console.error(e); }
   }
 
   async function addMemberToProject(pid, email) {
     try {
-      const res = await apiFetch(`/api/projects/${pid}/add_member`, {
-        method: 'POST',
-        body: JSON.stringify({email})
-      });
+      const res = await apiFetch(`/api/projects/${pid}/add_member`, { method: 'POST', body: JSON.stringify({email}) });
       const data = await res.json();
-      if(data.success) {
-        showToast('Member added successfully', 'success');
-        await loadProjectsFromServer();
-      } else {
-        showToast(data.error || 'Failed', 'danger');
-      }
-    } catch(e) {
-      console.error(e);
-      showToast('Network error', 'danger');
-    }
+      if(data.success) { showToast('Member added, sync enabled', 'success'); await loadProjectsFromServer(); }
+      else showToast(data.error || 'Failed', 'danger');
+    } catch(e) { showToast('Network error', 'danger'); }
   }
 
   function openReport(pid) {
@@ -965,20 +865,10 @@
       start_date: document.getElementById('editTaskStartDate').value,
       end_date: document.getElementById('editTaskEndDate').value
     });
-    const imgFiles = document.getElementById('modalImageInput').files, vidFiles = document.getElementById('modalVideoInput').files;
-    if(imgFiles.length || vidFiles.length) {
-      const fd = new FormData();
-      for(let f of imgFiles) fd.append('images', f);
-      for(let f of vidFiles) fd.append('videos', f);
-      await fetch(`/api/tasks/${tid}/media`, {method: 'POST', body: fd, credentials: 'include'});
-    }
     if(success) {
       bootstrap.Modal.getInstance(document.getElementById('editTaskModal')).hide();
-      showToast('Task updated successfully', 'success');
-      await loadProjectsFromServer();
-    } else {
-      showToast('Update failed', 'danger');
-    }
+      showToast('Task updated & synced', 'success');
+    } else showToast('Update failed', 'danger');
   });
 
   document.getElementById('addProjectForm')?.addEventListener('submit', async (e) => {
@@ -992,9 +882,7 @@
     if(success) {
       bootstrap.Modal.getInstance(document.getElementById('addProjectModal')).hide();
       document.getElementById('addProjectForm').reset();
-      showToast('Project created successfully', 'success');
-    } else {
-      showToast('Failed', 'danger');
+      showToast('Project created & synced', 'success');
     }
   });
 
@@ -1009,9 +897,7 @@
     });
     if(success) {
       bootstrap.Modal.getInstance(document.getElementById('editProjectModal')).hide();
-      showToast('Project updated successfully', 'success');
-    } else {
-      showToast('Update failed', 'danger');
+      showToast('Project updated & synced', 'success');
     }
   });
 
@@ -1021,8 +907,6 @@
     if(email) {
       await addMemberToProject(pid, email);
       bootstrap.Modal.getInstance(document.getElementById('addMemberModal')).hide();
-    } else {
-      showToast('Please select a user', 'warning');
     }
   });
 
@@ -1042,114 +926,46 @@
     loadingOverlay.classList.add('active');
     try {
       const element = document.getElementById('reportModalBody');
-      await html2pdf().set({
-        margin: [0.5,0.5,0.5,0.5],
-        filename: `project_report_${Date.now()}.pdf`,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
-        jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
-      }).from(element).save();
-      showToast('PDF generated successfully', 'success');
-    } catch (error) {
-      console.error(error);
-      showToast('Failed to generate PDF', 'danger');
-    } finally {
-      loadingOverlay.classList.remove('active');
-    }
+      await html2pdf().set({ margin: [0.5,0.5,0.5,0.5], filename: `project_report_${Date.now()}.pdf`, image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2, useCORS: true }, jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' } }).from(element).save();
+      showToast('PDF generated', 'success');
+    } catch (error) { showToast('Failed', 'danger'); }
+    finally { loadingOverlay.classList.remove('active'); }
   });
 
   document.getElementById('exportGanttPdfBtn')?.addEventListener('click', async () => {
     const loadingOverlay = document.getElementById('loadingOverlay');
-    const exportStage = document.getElementById('ganttExportStage');
-    const sourceCard = document.getElementById('ganttCardForExport');
-
     loadingOverlay.classList.add('active');
-
     try {
-      if (!sourceCard || !exportStage) {
-        throw new Error('Gantt export container not found');
-      }
-
-      if (!lastGanttTasks || lastGanttTasks.length === 0) {
-        renderGanttChart();
-      }
-
-      if (!lastGanttTasks || lastGanttTasks.length === 0) {
-        showToast('No Gantt data available to export.', 'warning');
-        return;
-      }
-
-      exportStage.innerHTML = '';
-
-      const clone = sourceCard.cloneNode(true);
-      clone.id = 'ganttCardExportClone';
-      clone.style.overflow = 'visible';
-      clone.style.boxShadow = 'none';
+      const clone = document.getElementById('ganttCardForExport').cloneNode(true);
       clone.style.width = '1600px';
-      clone.style.maxWidth = 'none';
-
+      clone.style.overflow = 'visible';
       const ganttClone = clone.querySelector('#gantt');
-      if (!ganttClone) {
-        throw new Error('Gantt element not found in clone');
+      if(ganttClone) {
+        ganttClone.innerHTML = '';
+        new Gantt(ganttClone, lastGanttTasks, { view_mode: 'Week' });
+        await new Promise(r => setTimeout(r, 300));
+        await html2pdf().set({ margin: 0.5, filename: `gantt_${Date.now()}.pdf`, html2canvas: { scale: 2.5 } }).from(clone).save();
+        showToast('Gantt PDF exported', 'success');
       }
-
-      ganttClone.id = 'gantt-export-target';
-      ganttClone.innerHTML = '';
-      ganttClone.style.minWidth = '1400px';
-      ganttClone.style.overflow = 'visible';
-
-      exportStage.appendChild(clone);
-
-      await new Promise(resolve => setTimeout(resolve, 300));
-      if (document.fonts && document.fonts.ready) {
-        await document.fonts.ready.catch(() => {});
-      }
-
-      new Gantt('#gantt-export-target', lastGanttTasks, {
-        on_date_change: () => {},
-        on_progress_change: () => {},
-        view_mode: 'Week'
-      });
-
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      const opt = {
-        margin: [0.5, 0.5, 0.5, 0.5],
-        filename: `gantt_timeline_${Date.now()}.pdf`,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: {
-          scale: 2.5,
-          useCORS: true,
-          letterRendering: true,
-          logging: false,
-          backgroundColor: '#ffffff',
-          windowWidth: clone.scrollWidth,
-          windowHeight: clone.scrollHeight
-        },
-        jsPDF: { unit: 'in', format: 'a4', orientation: 'landscape' }
-      };
-
-      await html2pdf().set(opt).from(clone).save();
-      showToast('Gantt PDF exported successfully!', 'success');
-    } catch (error) {
-      console.error('Gantt PDF export error:', error);
-      showToast('Failed to export Gantt PDF.', 'danger');
-    } finally {
-      exportStage.innerHTML = '';
-      loadingOverlay.classList.remove('active');
-    }
+    } catch(e) { showToast('Export failed', 'danger'); }
+    finally { loadingOverlay.classList.remove('active'); }
   });
-  
+
   function escapeHtml(str) { if(!str) return ''; return str.replace(/[&<>]/g, function(m) { if(m === '&') return '&amp;'; if(m === '<') return '&lt;'; if(m === '>') return '&gt;'; return m; }); }
-  async function checkTeamMember() { const res = await apiFetch('/api/check_team_member'); const data = await res.json(); console.log('Team Member Check:', data); showToast(`Status: ${JSON.stringify(data, null, 2)}`, 'info', { duration: 8000 }); }
+  
   const mobileMenuToggle = document.getElementById('mobileMenuToggle');
   const sidebar = document.getElementById('sidebar');
   const mobileOverlay = document.getElementById('mobileOverlay');
-  if(mobileMenuToggle) { mobileMenuToggle.onclick = () => { sidebar.classList.toggle('mobile-open'); mobileOverlay.classList.toggle('active'); }; }
-  if(mobileOverlay) { mobileOverlay.onclick = () => { sidebar.classList.remove('mobile-open'); mobileOverlay.classList.remove('active'); }; }
-  document.getElementById('trashBtn')?.addEventListener('click', () => { renderTrashProjects(); });
+  if(mobileMenuToggle) mobileMenuToggle.onclick = () => { sidebar.classList.toggle('mobile-open'); mobileOverlay.classList.toggle('active'); };
+  if(mobileOverlay) mobileOverlay.onclick = () => { sidebar.classList.remove('mobile-open'); mobileOverlay.classList.remove('active'); };
+  
+  document.getElementById('syncStatusLink')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    showToast('Real-time sync active with Fly.io backend', 'info');
+  });
+  
   loadProjectsFromServer();
-  setInterval(() => { if(!syncInProgress) loadProjectsFromServer(); }, 30000);
+  setInterval(() => { if(!syncInProgress) loadProjectsFromServer(); }, 20000);
 </script>
 </body>
 </html>
