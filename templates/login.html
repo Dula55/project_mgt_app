@@ -30,6 +30,10 @@
             width: 100%;
             overflow: hidden;
             animation: fadeIn 0.5s ease-in;
+
+            /* FIX */
+            display: flex;
+            flex-direction: column;
         }
 
         @keyframes fadeIn {
@@ -65,6 +69,7 @@
 
         .login-form {
             padding: 35px 25px;
+            flex: 1; /* pushes footer down */
         }
 
         .form-group {
@@ -91,16 +96,6 @@
             border-color: #667eea;
             outline: none;
             box-shadow: 0 0 0 3px rgba(102,126,234,0.1);
-        }
-
-        .form-check {
-            display: flex;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-
-        .form-check input {
-            margin-right: 8px;
         }
 
         .login-btn {
@@ -184,6 +179,20 @@
             content: "🔄 ";
             font-size: 14px;
         }
+
+        /* FOOTER FIX */
+        .site-footer {
+            text-align: center;
+            padding: 15px;
+            font-size: 12px;
+            color: #666;
+            border-top: 1px solid #eee;
+            background: #fafafa;
+        }
+
+        .site-footer strong {
+            color: #333;
+        }
     </style>
 </head>
 
@@ -199,7 +208,6 @@
 
     <div class="login-form">
 
-        <!-- Flash Messages -->
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
@@ -208,7 +216,6 @@
             {% endif %}
         {% endwith %}
 
-        <!-- Login Form -->
         <form method="POST" action="{{ url_for('login') }}">
 
             <div class="form-group">
@@ -224,7 +231,6 @@
             <button type="submit" class="login-btn">Login</button>
         </form>
 
-        <!-- Links -->
         <div class="links">
             <p>
                 Don't have an account?
@@ -232,7 +238,6 @@
             </p>
         </div>
 
-        <!-- Admin -->
         <div class="admin-link">
             <a href="{{ url_for('admin') }}">
                 🔐 Admin Portal
@@ -243,10 +248,18 @@
         <div class="sync-badge">
             Your projects and tasks sync automatically across all your devices
         </div>
-
     </div>
 
+    <!-- MOVED FOOTER OUTSIDE FORM -->
+    <footer class="site-footer">
+        Developed by <strong>Ramsulone Innovations &amp; Services Ltd</strong> &copy; <span id="footerYear"></span>
+    </footer>
+
 </div>
+
+<script>
+    document.getElementById("footerYear").textContent = new Date().getFullYear();
+</script>
 
 </body>
 </html>

@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!DOCTYPE html> 
 <html lang="en">
 <head>
   <meta charset="utf-8" />
@@ -15,8 +15,10 @@
   <script src="https://cdn.plot.ly/plotly-2.18.0.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-  <!-- jsPDF for robust PDF generation (alternative/fallback) -->
+  <!-- jsPDF for robust PDF generation -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <!-- jspdf-autotable for table support -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
 
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -277,11 +279,27 @@
 
     .trash-count-badge { margin-left: 6px; }
 
+    .site-footer {
+      margin-left: var(--sidebar-width);
+      background: #fff;
+      border-top: 1px solid var(--border-light);
+      color: var(--text-muted);
+      padding: 0.95rem 1.25rem;
+      text-align: center;
+      font-size: 0.9rem;
+      box-shadow: var(--shadow-sm);
+    }
+    .site-footer strong {
+      color: var(--text-dark);
+      font-weight: 700;
+    }
+
     @media (max-width: 991.98px) {
       .sidebar { transform: translateX(-100%); box-shadow: 2px 0 20px rgba(0,0,0,0.10); }
       .sidebar.mobile-open { transform: translateX(0); }
       .main-content { margin-left: 0; }
       .fab-mobile { display: inline-flex; }
+      .site-footer { margin-left: 0; }
     }
 
     @media (max-width: 767.98px) {
@@ -317,6 +335,43 @@
       .report-wrap { box-shadow: none !important; }
       .chart-box { min-height: 250px !important; }
     }
+    
+    /* PDF export temporary styles */
+    .pdf-export-mode {
+      background: white !important;
+      padding: 20px !important;
+      width: 100% !important;
+      overflow: visible !important;
+    }
+    .pdf-export-mode .gantt {
+      transform: scale(1) !important;
+    }
+    
+    /* Ensure Gantt container can be fully captured */
+    .gantt-for-export {
+      overflow: visible !important;
+      width: 100% !important;
+    }
+    .gantt-for-export .gantt {
+      transform: scale(1) !important;
+      width: 100% !important;
+    }
+    
+    /* Full-width Gantt for export */
+    .full-width-gantt {
+      position: absolute;
+      top: -9999px;
+      left: 0;
+      width: 2500px;
+      background: white;
+      padding: 20px;
+      z-index: 9999;
+    }
+    
+    /* Ensure Gantt container has proper height */
+    .gantt .gantt-container {
+      min-height: 400px;
+    }
   </style>
 </head>
 <body>
@@ -324,8 +379,8 @@
 <div class="loading-overlay" id="loadingOverlay">
   <div class="text-center text-white">
     <div class="spinner mx-auto mb-3"></div>
-    <h4>Generating PDF Report...</h4>
-    <p>This may take a moment</p>
+    <h4>Generating PDF...</h4>
+    <p>Please wait while we prepare your document</p>
   </div>
 </div>
 
@@ -454,13 +509,21 @@
 
       <div id="projectsContainer" class="projects-grid"></div>
 
-      <div class="gantt-card">
+      <div class="gantt-card" id="ganttCardForExport">
         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
           <h5 class="fw-bold m-0">
             <i class="bi bi-bar-chart-steps text-primary me-2"></i>Interactive Gantt Timeline
           </h5>
-          <div>
-            <button class="btn btn-success btn-sm" id="exportGanttPdfBtn"><i class="bi bi-file-pdf"></i> Export Gantt as PDF</button>
+          <div class="d-flex gap-2">
+            <button class="btn btn-primary btn-sm" id="exportFullPdfBtn">
+              <i class="bi bi-file-earmark-richtext"></i> Export Full Report PDF
+            </button>
+            <button class="btn btn-success btn-sm" id="exportGanttPdfBtn">
+              <i class="bi bi-file-pdf"></i> Export Gantt Chart
+            </button>
+            <button class="btn btn-info btn-sm" id="exportTaskTimelineBtn">
+              <i class="bi bi-clock-history"></i> Export Task Timeline
+            </button>
             <small class="text-muted ms-2">Drag bars to adjust dates</small>
           </div>
         </div>
@@ -469,6 +532,10 @@
     </div>
   </main>
 </div>
+
+<footer class="site-footer">
+  <span>Developed by <strong>Ramsulone Innovations &amp; Services Ltd</strong> &copy; <span id="footerYear"></span></span>
+</footer>
 
 <!-- MODALS -->
 <div class="modal fade" id="addProjectModal" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-dialog-centered"><div class="modal-content border-0 shadow"><div class="modal-header bg-light"><h5 class="modal-title fw-bold">Create Project</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><form id="addProjectForm"><div class="modal-body"><div class="mb-3"><label class="form-label fw-semibold">Project name</label><input type="text" id="projName" class="form-control" required></div><div class="mb-3"><label class="form-label fw-semibold">Project Type</label><select name="type" id="projType" class="form-select" required><option value="" disabled selected>Select project type...</option><option value="Road">Road Construction</option><option value="Building">Building Development</option><option value="Commercial">Proposed Commercial Development</option></select></div><div class="row g-2"><div class="col-12 col-sm-6"><label>Start date</label><input type="date" id="projStart" class="form-control"></div><div class="col-12 col-sm-6"><label>End date</label><input type="date" id="projEnd" class="form-control"></div></div></div><div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-primary">Create Project</button></div></form></div></div></div>
@@ -484,7 +551,7 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
-  // ---------- FULL ORIGINAL STATE + ENHANCED PDF & UPLOADS ----------
+  // ==================== ORIGINAL APPLICATION STATE (FULLY PRESERVED) ====================
   let projectsData = [];
   let trashedProjectsData = [];
   let syncInProgress = false;
@@ -506,7 +573,7 @@
     const tbody = document.getElementById('trashModalBody');
     if (!tbody) return;
     if (trashedProjectsData.length === 0) { tbody.innerHTML = '<div class="alert alert-info">No trashed projects</div>'; updateTrashBadge(); return; }
-    let html = '<table class="table table-hover"><thead><tr><th>Project</th><th>Type</th><th>Actions</th></tr></thead><tbody>';
+    let html = '<table class="table table-hover"><thead><tr><th>Project</th><th>Type</th><th>Actions</th><tr></thead><tbody>';
     trashedProjectsData.forEach(p => { html += `<tr><td>${escapeHtml(p.name)}</td><td>${escapeHtml(p.project_type||'General')}</td><td>`; if (userRole === 'admin') { html += `<button class="btn btn-sm btn-success me-2" onclick="restoreProject(${p.id})">Restore</button><button class="btn btn-sm btn-danger" onclick="permanentDelete(${p.id})">Delete Forever</button>`; } else { html += `<span class="text-muted">Only admin can restore</span>`; } html += `</td></tr>`; });
     html += '</tbody></table>';
     tbody.innerHTML = html;
@@ -553,48 +620,356 @@
   
   function getColorForTask(taskId, idx) { const palette = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec489a', '#06b6d4', '#84cc16']; return palette[idx % palette.length]; }
 
-  function renderGanttChart() {
+  // Helper function to get all tasks from all projects for full Gantt view
+  function getAllTasksForGantt() {
     let tasks = [];
     projectsData.forEach(p => (p.tasks||[]).forEach(t => {
       if (t.start_date && t.end_date) {
-        tasks.push({ id: t.id.toString(), name: t.name, start: t.start_date, end: t.end_date, progress: (t.progress||0) / 100, custom_class: `gantt-task-${t.id}` });
+        tasks.push({ 
+          id: t.id.toString(), 
+          name: `${p.name}: ${t.name}`, 
+          start: t.start_date, 
+          end: t.end_date, 
+          progress: (t.progress||0) / 100
+        });
       }
     }));
-    const ganttDiv = document.getElementById("gantt");
-    if (!ganttDiv) return;
-    ganttDiv.innerHTML = '';
-    if (tasks.length === 0) { ganttDiv.innerHTML = '<div class="alert alert-light">No tasks with dates available</div>'; return; }
-    try {
-      if (currentGanttInstance && typeof currentGanttInstance.refresh === 'function') currentGanttInstance.refresh(tasks);
-      currentGanttInstance = new Gantt("#gantt", tasks, { on_date_change: async (task, start, end) => { await updateTaskOnServer(parseInt(task.id), { start_date: start.toISOString().slice(0,10), end_date: end.toISOString().slice(0,10) }); }, on_progress_change: async (task, prog) => { await updateTaskOnServer(parseInt(task.id), { progress: Math.round(prog * 100) }); } });
-      setTimeout(() => { tasks.forEach((t, idx) => { const color = getColorForTask(t.id, idx); const barElem = document.querySelector(`.gantt .bar[data-id="${t.id}"]`); if (barElem) { barElem.style.backgroundColor = color; const progressElem = barElem.querySelector('.bar-progress'); if (progressElem) progressElem.style.backgroundColor = color; } }); }, 50);
-    } catch (error) { console.error('Gantt error:', error); ganttDiv.innerHTML = '<div class="alert alert-warning">Error rendering Gantt chart</div>'; }
+    return tasks;
   }
 
-  // ENHANCED PDF export using html2canvas + jsPDF (high fidelity)
-  async function exportGanttAsPDF() {
-    const ganttCard = document.querySelector('.gantt-card');
-    if (!ganttCard) { showToast("Gantt container not found", "danger"); return; }
-    const loading = document.getElementById('loadingOverlay');
-    if(loading) loading.classList.add('active');
+  function renderGanttChart() {
+    const ganttDiv = document.getElementById("gantt");
+    if (!ganttDiv) return;
+    
+    let tasks = getAllTasksForGantt();
+    
+    if (tasks.length === 0) { 
+      ganttDiv.innerHTML = '<div class="alert alert-light">No tasks with dates available. Create tasks to see the Gantt chart.</div>'; 
+      return; 
+    }
+    
     try {
-      const canvas = await html2canvas(ganttCard, { scale: 2, backgroundColor: '#ffffff', logging: false });
-      const { jsPDF } = window.jspdf;
-      const pdf = new jsPDF('landscape', 'mm', 'a4');
-      const imgData = canvas.toDataURL('image/png');
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-      pdf.save('FlowTrack_Gantt.pdf');
-      showToast('Gantt PDF exported successfully', 'success');
-    } catch (err) {
-      console.error(err);
-      showToast('Failed to generate PDF', 'danger');
-    } finally {
-      if(loading) loading.classList.remove('active');
+      ganttDiv.innerHTML = '';
+      
+      currentGanttInstance = new Gantt("#gantt", tasks, { 
+        on_date_change: async (task, start, end) => { 
+          const taskId = parseInt(task.id);
+          await updateTaskOnServer(taskId, { start_date: start.toISOString().slice(0,10), end_date: end.toISOString().slice(0,10) });
+          await loadProjectsFromServer();
+        }, 
+        on_progress_change: async (task, prog) => { 
+          const taskId = parseInt(task.id);
+          await updateTaskOnServer(taskId, { progress: Math.round(prog * 100) });
+          await loadProjectsFromServer();
+        },
+        view_mode: 'Week'
+      });
+      
+      setTimeout(() => { 
+        tasks.forEach((t, idx) => { 
+          const color = getColorForTask(t.id, idx); 
+          const barElem = document.querySelector(`.gantt .bar[data-id="${t.id}"]`); 
+          if (barElem) { 
+            barElem.style.backgroundColor = color; 
+            const progressElem = barElem.querySelector('.bar-progress'); 
+            if (progressElem) progressElem.style.backgroundColor = color; 
+          } 
+        }); 
+      }, 100);
+      
+    } catch (error) { 
+      console.error('Gantt error:', error); 
+      ganttDiv.innerHTML = '<div class="alert alert-warning">Error rendering Gantt chart. Please refresh the page.</div>'; 
     }
   }
 
+  // ==================== EXPORT GANTT CHART (FULL TIMELINE) ====================
+  async function exportGanttAsPDF() {
+    const loading = document.getElementById('loadingOverlay');
+    if (loading) loading.classList.add('active');
+
+    try {
+      const allTasks = getAllTasksForGantt();
+      
+      if (allTasks.length === 0) {
+        showToast("No Gantt chart data available to export", "danger");
+        return;
+      }
+
+      const tempContainer = document.createElement("div");
+      tempContainer.className = "full-width-gantt";
+      tempContainer.style.width = "3000px";
+      tempContainer.style.background = "#fff";
+      tempContainer.style.padding = "20px";
+      tempContainer.style.position = "absolute";
+      tempContainer.style.top = "-9999px";
+      tempContainer.style.left = "0";
+      document.body.appendChild(tempContainer);
+
+      const title = document.createElement("h3");
+      title.textContent = "FlowTrack - Project Gantt Timeline";
+      title.style.marginBottom = "10px";
+      title.style.fontFamily = "Inter, sans-serif";
+      tempContainer.appendChild(title);
+      
+      const dateInfo = document.createElement("p");
+      dateInfo.textContent = `Generated: ${new Date().toLocaleString()} | Total Projects: ${projectsData.length} | Total Tasks: ${allTasks.length}`;
+      dateInfo.style.marginBottom = "20px";
+      dateInfo.style.fontSize = "12px";
+      dateInfo.style.color = "#666";
+      tempContainer.appendChild(dateInfo);
+
+      const ganttDiv = document.createElement("div");
+      ganttDiv.id = "tempGanttForExport";
+      ganttDiv.style.width = "100%";
+      ganttDiv.style.minWidth = "2800px";
+      ganttDiv.style.height = `${Math.max(400, allTasks.length * 35 + 100)}px`;
+      tempContainer.appendChild(ganttDiv);
+
+      const tempGantt = new Gantt("#tempGanttForExport", allTasks, { view_mode: 'Week' });
+
+      await new Promise(resolve => setTimeout(resolve, 800));
+
+      allTasks.forEach((t, idx) => {
+        const color = getColorForTask(t.id, idx);
+        const barElem = document.querySelector(`#tempGanttForExport .bar[data-id="${t.id}"]`);
+        if (barElem) {
+          barElem.style.backgroundColor = color;
+          const progressElem = barElem.querySelector('.bar-progress');
+          if (progressElem) progressElem.style.backgroundColor = color;
+        }
+      });
+
+      await new Promise(resolve => setTimeout(resolve, 300));
+
+      const canvas = await html2canvas(tempContainer, {
+        scale: 2,
+        backgroundColor: '#ffffff',
+        logging: false,
+        useCORS: true,
+        windowWidth: tempContainer.scrollWidth,
+        windowHeight: tempContainer.scrollHeight
+      });
+
+      document.body.removeChild(tempContainer);
+
+      const { jsPDF } = window.jspdf;
+      
+      const pdf = new jsPDF({
+        orientation: "landscape",
+        unit: "mm",
+        format: "a4"
+      });
+      
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      
+      const imgData = canvas.toDataURL("image/jpeg", 0.95);
+      const imgAspect = canvas.width / canvas.height;
+      const pageAspect = pdfWidth / pdfHeight;
+      
+      let finalWidth, finalHeight;
+      
+      if (imgAspect > pageAspect) {
+        finalWidth = pdfWidth;
+        finalHeight = pdfWidth / imgAspect;
+      } else {
+        finalHeight = pdfHeight;
+        finalWidth = pdfHeight * imgAspect;
+      }
+      
+      const x = (pdfWidth - finalWidth) / 2;
+      const y = (pdfHeight - finalHeight) / 2;
+      
+      pdf.addImage(imgData, "JPEG", x, y, finalWidth, finalHeight);
+      pdf.save("FlowTrack_Gantt_Timeline.pdf");
+      
+      showToast(`Gantt timeline exported successfully! ${allTasks.length} tasks from ${projectsData.length} projects.`, "success");
+      
+    } catch (err) {
+      console.error("PDF export error:", err);
+      showToast("Failed to export PDF: " + (err.message || "Unknown error"), "danger");
+    } finally {
+      if (loading) loading.classList.remove('active');
+    }
+  }
+
+  // ==================== EXPORT TASK TIMELINE (SIMPLIFIED TASK LIST VIEW) ====================
+  async function exportTaskTimeline() {
+    const loading = document.getElementById('loadingOverlay');
+    if (loading) loading.classList.add('active');
+
+    try {
+      const allTasks = getAllTasksForGantt();
+      
+      if (allTasks.length === 0) {
+        showToast("No task data available to export", "danger");
+        return;
+      }
+
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF("landscape", "mm", "a4");
+      
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      
+      // Add title
+      pdf.setFontSize(18);
+      pdf.text("Task Timeline Report", pageWidth / 2, 15, { align: "center" });
+      
+      pdf.setFontSize(10);
+      pdf.text(`Generated: ${new Date().toLocaleString()}`, pageWidth / 2, 22, { align: "center" });
+      pdf.text(`Total Tasks: ${allTasks.length} | Projects: ${projectsData.length}`, pageWidth / 2, 29, { align: "center" });
+      
+      // Prepare table data
+      const tableData = allTasks.map(task => [
+        task.name,
+        task.start,
+        task.end,
+        `${Math.round(task.progress * 100)}%`
+      ]);
+      
+      pdf.autoTable({
+        startY: 35,
+        head: [["Task Name", "Start Date", "End Date", "Progress"]],
+        body: tableData,
+        theme: 'striped',
+        styles: { fontSize: 8, cellPadding: 3, overflow: 'linebreak' },
+        headStyles: { fillColor: [59, 130, 246], textColor: [255, 255, 255], fontStyle: 'bold' },
+        columnStyles: {
+          0: { cellWidth: 80 },
+          1: { cellWidth: 35 },
+          2: { cellWidth: 35 },
+          3: { cellWidth: 25 }
+        }
+      });
+      
+      pdf.save("FlowTrack_Task_Timeline.pdf");
+      showToast(`Task timeline exported successfully! ${allTasks.length} tasks listed.`, "success");
+      
+    } catch (err) {
+      console.error("Task timeline export error:", err);
+      showToast("Failed to export task timeline: " + (err.message || "Unknown error"), "danger");
+    } finally {
+      if (loading) loading.classList.remove('active');
+    }
+  }
+
+  // ==================== FULL PROJECT PDF EXPORT FUNCTION ====================
+  async function exportFullProjectPDF() {
+    const loading = document.getElementById('loadingOverlay');
+    if (loading) loading.classList.add('active');
+
+    try {
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF("p", "mm", "a4");
+
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+
+      let isFirstPage = true;
+
+      for (const p of projectsData) {
+        if (!isFirstPage) pdf.addPage();
+        isFirstPage = false;
+
+        let y = 10;
+
+        pdf.setFontSize(16);
+        pdf.text("FlowTrack Project Report", 10, y);
+        y += 8;
+
+        pdf.setFontSize(10);
+        pdf.text(`Generated: ${new Date().toLocaleString()}`, 10, y);
+        y += 10;
+
+        pdf.setFontSize(13);
+        pdf.text(p.name, 10, y);
+        y += 6;
+
+        pdf.setFontSize(10);
+        pdf.text(`Type: ${p.project_type || 'General'}`, 10, y); y += 5;
+        pdf.text(`Completion: ${p.completion || 0}%`, 10, y); y += 5;
+        pdf.text(`Duration: ${p.start_date || '—'} → ${p.end_date || '—'}`, 10, y); y += 8;
+
+        if (p.tasks?.length) {
+          pdf.setFontSize(11);
+          pdf.text("Tasks:", 10, y);
+          y += 5;
+
+          const rows = p.tasks.map(t => [
+            t.name,
+            (t.progress || 0) + "%",
+            t.start_date || '—',
+            t.end_date || '—'
+          ]);
+
+          pdf.autoTable({
+            startY: y,
+            head: [["Task", "Progress", "Start", "End"]],
+            body: rows,
+            theme: 'grid',
+            styles: { fontSize: 8, cellPadding: 2 },
+            headStyles: { fillColor: [59, 130, 246], textColor: [255, 255, 255], fontStyle: 'bold' }
+          });
+
+          y = pdf.lastAutoTable.finalY + 10;
+        }
+
+        if (y + 60 > pageHeight) {
+          pdf.addPage();
+          y = 10;
+        }
+
+        pdf.setFontSize(12);
+        pdf.text("Project Analytics:", 10, y);
+        y += 5;
+
+        const tempDiv = document.createElement('div');
+        tempDiv.style.width = '400px';
+        tempDiv.style.height = '300px';
+        tempDiv.style.position = 'absolute';
+        tempDiv.style.top = '-9999px';
+        document.body.appendChild(tempDiv);
+
+        await Plotly.newPlot(tempDiv, [{
+          x: [p.name],
+          y: [p.completion || 0],
+          type: 'bar',
+          marker: { color: '#3b82f6' }
+        }], {
+          title: `${p.name} - Completion`,
+          font: { family: "Inter, sans-serif" },
+          paper_bgcolor: '#ffffff',
+          plot_bgcolor: '#f8fafc'
+        });
+
+        const chartCanvas = await html2canvas(tempDiv, { scale: 2, backgroundColor: '#ffffff' });
+        document.body.removeChild(tempDiv);
+
+        const chartImgData = chartCanvas.toDataURL("image/png");
+        const chartWidth = pageWidth - 20;
+        const chartHeight = (chartCanvas.height * chartWidth) / chartCanvas.width;
+
+        if (y + chartHeight + 10 > pageHeight) {
+          pdf.addPage();
+          y = 10;
+        }
+
+        pdf.addImage(chartImgData, "PNG", 10, y, chartWidth, chartHeight);
+      }
+
+      pdf.save("FlowTrack_Full_Report.pdf");
+      showToast("Full report exported successfully", "success");
+
+    } catch (err) {
+      console.error(err);
+      showToast("Export failed: " + err.message, "danger");
+    } finally {
+      if (loading) loading.classList.remove('active');
+    }
+  }
+
+  // ==================== ORIGINAL EVENT HANDLERS & UTILITIES ====================
   window.openEditTaskModal = async (projectId, taskId) => {
     const proj = projectsData.find(p => p.id === projectId);
     const task = proj?.tasks?.find(t => t.id === taskId);
@@ -633,33 +1008,45 @@
       await loadProjectsFromServer();
     } else showToast('Update failed', 'danger');
   });
+  
   document.getElementById('addProjectForm')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const projectData = { name: document.getElementById('projName').value, project_type: document.getElementById('projType').value, start_date: document.getElementById('projStart').value, end_date: document.getElementById('projEnd').value };
     const success = await createProjectOnServer(projectData);
     if (success) { bootstrap.Modal.getInstance(document.getElementById('addProjectModal')).hide(); document.getElementById('addProjectForm').reset(); showToast('Project created!', 'success'); }
   });
+  
   document.getElementById('editProjectForm')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const id = parseInt(document.getElementById('editProjectId').value);
     const success = await updateProjectOnServer(id, { name: document.getElementById('editName').value, project_type: document.getElementById('editType').value, start_date: document.getElementById('editStart').value, end_date: document.getElementById('editEnd').value });
     if (success) { bootstrap.Modal.getInstance(document.getElementById('editProjectModal')).hide(); showToast('Project updated', 'success'); } else showToast('Update failed', 'danger');
   });
+  
   document.getElementById('confirmAddMemberBtn')?.addEventListener('click', async () => {
     const pid = parseInt(document.getElementById('addMemberProjectId').value);
     const email = document.getElementById('memberUserSelect').value;
     if (email) { await addMemberToProject(pid, email); bootstrap.Modal.getInstance(document.getElementById('addMemberModal')).hide(); }
   });
+  
   document.getElementById('globalSearch')?.addEventListener('input', (e) => { currentSearchText = e.target.value; renderProjects(currentSearchText); });
   document.getElementById('printReportBtn')?.addEventListener('click', () => { const w = window.open(''); w.document.write(`<html><head><title>Report</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet"></head><body class="p-4">${document.getElementById('reportModalBody').innerHTML}</body></html>`); w.print(); });
   document.getElementById('exportReportPDFBtn')?.addEventListener('click', () => { html2pdf().set({ margin: 1, filename: 'project-report.pdf' }).from(document.getElementById('reportModalBody')).save(); });
   document.getElementById('exportGanttPdfBtn')?.addEventListener('click', exportGanttAsPDF);
+  document.getElementById('exportFullPdfBtn')?.addEventListener('click', exportFullProjectPDF);
+  document.getElementById('exportTaskTimelineBtn')?.addEventListener('click', exportTaskTimeline);
+  
   function escapeHtml(str) { if (!str) return ''; return str.replace(/[&<>"']/g, function(m) { if (m === '&') return '&amp;'; if (m === '<') return '&lt;'; if (m === '>') return '&gt;'; if (m === '"') return '&quot;'; if (m === "'") return '&#039;'; return m; }); }
+  
   const mobileMenuToggle = document.getElementById('mobileMenuToggle');
   const sidebar = document.getElementById('sidebar');
   const mobileOverlay = document.getElementById('mobileOverlay');
   if (mobileMenuToggle) mobileMenuToggle.onclick = () => { sidebar.classList.toggle('mobile-open'); mobileOverlay.classList.toggle('active'); };
   if (mobileOverlay) mobileOverlay.onclick = () => { sidebar.classList.remove('mobile-open'); mobileOverlay.classList.remove('active'); };
+  
+  const footerYear = document.getElementById('footerYear');
+  if (footerYear) footerYear.textContent = new Date().getFullYear();
+
   loadProjectsFromServer();
   setInterval(() => { if (!syncInProgress) loadProjectsFromServer(); }, 30000);
 </script>
